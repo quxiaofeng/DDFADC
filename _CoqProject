@@ -1,0 +1,3 @@
+DDFADC.v
+-R . DDFADC
+-o Makefile
