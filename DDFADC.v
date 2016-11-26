@@ -6,25 +6,27 @@ Inductive type :=
 | typrod (l r : type)
 | tyarr (l r : type).
 
+Infix "~>" := tyarr (at level 55, right associativity).
+
 Inductive term : type -> Type :=
 | ttt : term tytop
-| texf { T } : term (tyarr tybot T)
+| texf { T } : term (tybot ~> T)
 | tlit : (*Double ->*) term tyreal
-| tplus : term (tyarr tyreal (tyarr tyreal tyreal))
-| tminus : term (tyarr tyreal (tyarr tyreal tyreal))
-| tdiv : term (tyarr tyreal (tyarr tyreal tyreal))
-| tmult : term (tyarr tyreal (tyarr tyreal tyreal))
-| tleft { A B } : term (tyarr A (tysum A B))
-| tright { A B } : term (tyarr B (tysum A B))
-| tsummatch { A B C } : term (tyarr (tysum A B) (tyarr (tyarr A C) (tyarr (tyarr B C) C)))
-| tmkprod { A B } : term (tyarr A (tyarr B (typrod A B)))
-| tzro { A B } : term (tyarr (typrod A B) A)
-| tfst { A B } : term (tyarr (typrod A B) B)
-| tapp { A B } (f : term (tyarr A B)) (x : term A) : term B
-| tS { A B C } : term (tyarr (tyarr A (tyarr B C)) (tyarr (tyarr A B) (tyarr A C)))
-| tK { A B } : term (tyarr A (tyarr B A))
-| tI { A } : term (tyarr A A)
-| tB { A B C } : term (tyarr (tyarr B C) (tyarr (tyarr A B) (tyarr A C)))
-| tC { A B C } : term (tyarr (tyarr A (tyarr B C)) (tyarr B (tyarr A C)))
-| tW { A B } : term (tyarr (tyarr A (tyarr A B)) (tyarr A B))
-| tY { A B } : term (tyarr (tyarr (tyarr A B) (tyarr A B)) (tyarr A B)).
+| tplus : term (tyarr tyreal (tyreal ~> tyreal))
+| tminus : term (tyreal ~> tyreal ~> tyreal)
+| tdiv : term (tyreal ~> tyreal ~> tyreal)
+| tmult : term (tyreal ~> tyreal ~> tyreal)
+| tleft { A B } : term (A ~> (tysum A B))
+| tright { A B } : term (B ~> (tysum A B))
+| tsummatch { A B C } : term ((tysum A B) ~> ((A ~> C) ~> ((B ~> C) ~> C)))
+| tmkprod { A B } : term (A ~> (B ~> (typrod A B)))
+| tzro { A B } : term ((typrod A B) ~> A)
+| tfst { A B } : term ((typrod A B) ~> B)
+| tapp { A B } (f : term (A ~> B)) (x : term A) : term B
+| tS { A B C } : term ((A ~> B ~> C) ~> (A ~> B) ~> (A ~> C))
+| tK { A B } : term (A ~> B ~> A)
+| tI { A } : term (A ~> A)
+| tB { A B C } : term ((B ~> C) ~> (A ~> B) ~> (A ~> C))
+| tC { A B C } : term ((A ~> B ~> C) ~> (B ~> A ~> C))
+| tW { A B } : term ((A ~> A ~> B) ~> (A ~> B))
+| tY { A B } : term (((A ~> B) ~> (A ~> B)) ~> (A ~> B)).
