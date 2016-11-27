@@ -122,14 +122,50 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
 Definition val_func A B (f : term (A ~> B)) (x : term A) : val (tapp f x) -> val f :=
   ltac:(intros H; dependent induction H; constructor; tauto).
 
+Hint Resolve val_func.
+
 Definition val_arg A B (f : term (A ~> B)) (x y : term A) : val (tapp f x) -> val x :=
   ltac:(intros H; dependent induction H; tauto).
 
+Hint Resolve val_arg.
+
+Definition vexf A x : val (tapp (@texf A) x) -> False :=
+  ltac:(intros H; dependent destruction H).
+
+Definition vreal x : val x -> exists r, x = tlit r :=
+  ltac:(intros H; dependent destruction H; eauto).
+
+Ltac work :=
+  repeat
+    match goal with
+    | H : val (tapp texf _) |- _ => apply vexf in H; contradict H
+    | H : val _ |- _ => apply vreal in H
+    end.
+
 Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
   induction tm; eauto; [].
-  destruct IHtm1, IHtm2; eauto; [| | |].
-  admit. (*?*)
-  admit.
-  admit.
-  admit.
+  destruct IHtm1, IHtm2; eauto; [].
+  dependent destruction tm1; eauto.
+  + dependent destruction tm1_1; work; eauto.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+    ++ admit.
+  + exfalso; dependent destruction v0.
+  + dependent destruction tm2; [].
+    dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
+    dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
+    right; intros H; dependent destruction H.
+  + dependent destruction tm2; [].
+    dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
+    dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
+    right; intros H; dependent destruction H.
+  + right; intros H; dependent destruction H.
 Admitted.
