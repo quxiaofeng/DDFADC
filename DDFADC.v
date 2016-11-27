@@ -119,15 +119,11 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
     val f -> val x ->
     red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x).
 
-Definition val_func A B (f : term (A ~> B)) (x : term A) : val (tapp f x) -> val f :=
+Definition val_func { A B } {f : term (A ~> B)} {x : term A} : val (tapp f x) -> val f :=
   ltac:(intros H; dependent induction H; constructor; tauto).
 
-Hint Resolve val_func.
-
-Definition val_arg A B (f : term (A ~> B)) (x y : term A) : val (tapp f x) -> val x :=
+Definition val_arg { A B } {f : term (A ~> B)} {x : term A} : val (tapp f x) -> val x :=
   ltac:(intros H; dependent induction H; tauto).
-
-Hint Resolve val_arg.
 
 Definition vexf A x : val (tapp (@texf A) x) -> False :=
   ltac:(intros H; dependent destruction H).
@@ -135,37 +131,57 @@ Definition vexf A x : val (tapp (@texf A) x) -> False :=
 Definition vreal x : val x -> exists r, x = tlit r :=
   ltac:(intros H; dependent destruction H; eauto).
 
+Inductive checked (X : Prop) { T : Type } (t : T) : Prop :=
+| is_checked (x : X) : checked X t.
+
+Ltac check H t :=
+  pose proof (is_checked _ t H); clear H.
+
+Ltac uncheck H := inversion H; clear H.
+
+Ltac uncheck_all t :=
+  repeat
+    match goal with
+    | H : checked _ t |- _ => uncheck H
+    end.
+
+Require Import String.
+
 Ltac work :=
   repeat
     match goal with
     | H : val (tapp texf _) |- _ => apply vexf in H; contradict H
     | H : val _ |- _ => apply vreal in H
-    end.
+    | H : val _ |- _ =>
+      pose proof (val_func H);
+      pose proof (val_arg H);
+      check H "val_app"%string
+    end; uncheck_all "val_app"%string.
+
+Ltac dd1 := let x := fresh in intros x; dependent destruction x.
 
 Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
   induction tm; eauto; [].
-  destruct IHtm1, IHtm2; eauto; [].
+  destruct IHtm1, IHtm2; try (right; intuition idtac; work; solve[eauto]); eauto.
   dependent destruction tm1; eauto.
-  + dependent destruction tm1_1; work; eauto.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
-    ++ admit.
+  + dependent destruction tm1_1; work; eauto.    
+    all:
+      right;
+      repeat
+        match goal with
+        | H : exists _, _ |- _ => destruct H
+        end;
+      subst;
+      dd1;
+      fail.    
   + exfalso; dependent destruction v0.
   + dependent destruction tm2; [].
     dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
     dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
-    right; intros H; dependent destruction H.
+    right; dd1.
   + dependent destruction tm2; [].
     dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
     dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
-    right; intros H; dependent destruction H.
-  + right; intros H; dependent destruction H.
-Admitted.
+    right; dd1.
+  + right; dd1.
+Defined.
