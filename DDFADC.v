@@ -1,3 +1,5 @@
+Require Export Program.
+
 Inductive type :=
 | tytop
 | tybot
@@ -8,14 +10,14 @@ Inductive type :=
 
 Infix "~>" := tyarr (at level 55, right associativity).
 
-Require Import Coq.Reals.Rdefinitions.
+Require Export Coq.Reals.Rdefinitions.
 
 Inductive term : type -> Type :=
 | tapp { A B } (f : term (A ~> B)) (x : term A) : term B
 | ttt : term tytop
 | texf { A } : term (tybot ~> A)
 | tlit : R -> term tyreal
-| tplus : term (tyarr tyreal (tyreal ~> tyreal))
+| tplus : term (tyreal ~> tyreal ~> tyreal)
 | tminus : term (tyreal ~> tyreal ~> tyreal)
 | tmult : term (tyreal ~> tyreal ~> tyreal)
 | tdiv : term (tyreal ~> tyreal ~> tyreal)
@@ -74,6 +76,8 @@ Inductive val : forall { A }, term A -> Prop :=
 | vtY A B : val (@tY A B)
 | vtY' A B f : val f -> val (tapp (@tY A B) f).
 
+Hint Constructors val.
+
 Inductive red : forall { A }, term A -> term A -> Prop :=
 | rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
 | rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x')
@@ -114,3 +118,18 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
 | rtY { A B } f x :
     val f -> val x ->
     red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x).
+
+Definition val_func A B (f : term (A ~> B)) (x : term A) : val (tapp f x) -> val f :=
+  ltac:(intros H; dependent induction H; constructor; tauto).
+
+Definition val_arg A B (f : term (A ~> B)) (x y : term A) : val (tapp f x) -> val x :=
+  ltac:(intros H; dependent induction H; tauto).
+
+Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
+  induction tm; eauto; [].
+  destruct IHtm1, IHtm2; eauto; [| | |].
+  admit. (*?*)
+  admit.
+  admit.
+  admit.
+Admitted.
