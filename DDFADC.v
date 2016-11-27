@@ -1,5 +1,7 @@
 Require Export Program.
 
+Require Import CoqUtil.Tactic.
+
 Inductive type :=
 | tytop
 | tybot
@@ -79,12 +81,10 @@ Inductive val : forall { A }, term A -> Prop :=
 Hint Constructors val.
 
 Inductive red : forall { A }, term A -> term A -> Prop :=
-| rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
-| rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x')
 | rtplus l r : red (tapp (tapp tplus (tlit l)) (tlit r)) (tlit (Rplus l r))
-| rtminus l r : red (tapp (tapp tplus (tlit l)) (tlit r)) (tlit (Rminus l r))
-| rtmult l r : red (tapp (tapp tplus (tlit l)) (tlit r)) (tlit (Rmult l r))
-| rtdiv l r : red (tapp (tapp tplus (tlit l)) (tlit r)) (tlit (Rdiv l r))
+| rtminus l r : red (tapp (tapp tminus (tlit l)) (tlit r)) (tlit (Rminus l r))
+| rtmult l r : red (tapp (tapp tmult (tlit l)) (tlit r)) (tlit (Rmult l r))
+| rtdiv l r : red (tapp (tapp tdiv (tlit l)) (tlit r)) (tlit (Rdiv l r))
 | rtleft { A B C } a f g :
     val a -> val f -> val g ->
     red (tapp (tapp (tapp (@tsummatch A B C) (tapp tleft a)) f) g) (tapp f a)
@@ -117,7 +117,9 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
     red (tapp (tapp (@tW A B) f) x) (tapp (tapp f x) x)
 | rtY { A B } f x :
     val f -> val x ->
-    red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x).
+    red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x)
+| rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
+| rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x').
 
 Definition val_func { A B } {f : term (A ~> B)} {x : term A} : val (tapp f x) -> val f :=
   ltac:(intros H; dependent induction H; constructor; tauto).
@@ -128,8 +130,11 @@ Definition val_arg { A B } {f : term (A ~> B)} {x : term A} : val (tapp f x) -> 
 Definition vexf A x : val (tapp (@texf A) x) -> False :=
   ltac:(intros H; dependent destruction H).
 
-Definition vreal x : val x -> exists r, x = tlit r :=
-  ltac:(intros H; dependent destruction H; eauto).
+Definition vreal x : val x -> { r | x = tlit r } :=
+  ltac:(dependent destruction x;
+          intros H;
+          solve[eauto] ||
+               exfalso; dependent destruction H).
 
 Inductive checked (X : Prop) { T : Type } (t : T) : Prop :=
 | is_checked (x : X) : checked X t.
@@ -148,40 +153,67 @@ Ltac uncheck_all t :=
 Require Import String.
 
 Ltac work :=
+  repeat intro;
   repeat
-    match goal with
+    (match goal with
     | H : val (tapp texf _) |- _ => apply vexf in H; contradict H
     | H : val _ |- _ => apply vreal in H
     | H : val _ |- _ =>
+     try solve [(exfalso; dependent destruction H)];
       pose proof (val_func H);
       pose proof (val_arg H);
       check H "val_app"%string
-    end; uncheck_all "val_app"%string.
+    | H : tlit _ = tlit _ |- _ =>
+      invcs H
+     end ||
+         destruct_exists ||
+         subst);
+  uncheck_all "val_app"%string;
+  cleanPS tauto.
 
 Ltac dd1 := let x := fresh in intros x; dependent destruction x.
 
 Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
   induction tm; eauto; [].
-  destruct IHtm1, IHtm2; try (right; intuition idtac; work; solve[eauto]); eauto.
-  dependent destruction tm1; eauto.
-  + dependent destruction tm1_1; work; eauto.    
-    all:
-      right;
-      repeat
-        match goal with
-        | H : exists _, _ |- _ => destruct H
-        end;
-      subst;
-      dd1;
-      fail.    
-  + exfalso; dependent destruction v0.
-  + dependent destruction tm2; [].
-    dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
-    dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
-    right; dd1.
-  + dependent destruction tm2; [].
-    dependent destruction tm2_1; try (exfalso; dependent destruction v0; fail); [].
-    dependent destruction tm2_1_1; try (exfalso; dependent destruction v0; fail); [].
-    right; dd1.
-  + right; dd1.
+  destruct IHtm1, IHtm2; try (right; intuition idtac; work; solve[eauto]); eauto; [].
+  dependent destruction tm1; eauto; try (right; dd1; fail); [].
+  dependent destruction tm1_1; work; eauto;
+    (right;
+     repeat destruct_exists;
+     subst;
+     dd1;
+     fail).
+Defined.
+
+Definition red_not_val A x y : red x y -> ~ @val A x.
+  intros H;
+    dependent induction H;
+    work; try tauto; repeat destruct_exists; congruence.
+Defined.
+
+Definition val_not_red A x y : @val A x -> ~ red x y.
+  intros X H;
+    dependent induction H;
+    work; try tauto; repeat destruct_exists; congruence.
+Defined.
+
+Definition eval A x : { y | red x y } + { @val A x }.
+  Ltac red_it := left; repeat destruct_exists; repeat econstructor; eauto; fail.
+  dependent induction x;
+    repeat
+      match goal with
+      | H : { _ | _ } + { _ } |- _ => destruct H as [[]|]
+      end;
+    eauto;
+    try red_it; [].
+  dependent destruction x1; eauto; try red_it; work.
+  + dependent destruction x1_1; eauto; work; try red_it; [].
+    dependent destruction x1_1_1; try red_it; work; [].
+    dependent destruction x1_1_2; dependent destruction x1_1_2_1; work; red_it.
+  + dependent destruction x2; dependent destruction x2_1; work; [].
+    dependent destruction x2_1_1; work; [].
+    red_it.
+  + dependent destruction x2; dependent destruction x2_1; work; [].
+    dependent destruction x2_1_1; work; [].
+    red_it.
 Defined.
