@@ -276,6 +276,21 @@ Defined.
 
 Hint Resolve hasY_rel.
 
+Definition transitive_closure_transitive { T } p (x y z : T) :
+  transitive_closure p x y -> transitive_closure p y z -> transitive_closure p x z :=
+  ltac:(induction 1; eauto).
+
+Definition transitive_closure_appf { A B } f f' x :
+  transitive_closure red f f' ->
+  transitive_closure red (@tapp A B f x) (tapp f' x) :=
+  ltac:(induction 1; eauto).
+
+Definition transitive_closure_appx { A B } f x x' :
+  val f ->
+  transitive_closure red x x' ->
+  transitive_closure red (@tapp A B f x) (tapp f x') :=
+  ltac:(induction 2; eauto).
+  
 Definition rel_hold t x : @rel t x.
   induction x;
     compute in * |-;
@@ -289,12 +304,17 @@ Definition rel_hold t x : @rel t x.
     fold (@rel (tyreal ~> tyreal)).
     compute in H; ii; repeat destruct_exists; ii; eauto.
     right; ii; eauto.
-    admit.
+    exists (tapp tplus H0); eauto.
     compute in *; ii; repeat destruct_exists; ii; eauto.
     right.
     work.
     exists (tlit (Rplus H2 H5)); ii; eauto.
-    admit.
+    eapply transitive_closure_transitive.
+    eapply transitive_closure_appf.
+    eapply transitive_closure_appx; eauto.
+    eapply transitive_closure_transitive.
+    eapply transitive_closure_appx; eauto.
+    eauto.
   + admit.
   + admit.
   + admit.
