@@ -257,6 +257,24 @@ Definition rel { ty : type } : forall (t : term ty), Prop.
   + exact (hasY t \/ (halt t /\ (forall x, IHty1 (tracking _) x -> IHty2 (tracking _) (tapp t x)))).
 Defined.
 
+Definition rel_top t : @YoH tytop t -> rel t := ltac:(ii).
+Definition rel_bot t : @YoH tybot t -> rel t := ltac:(ii).
+Definition rel_real t : @YoH tyreal t -> rel t := ltac:(ii).
+Definition rel_sum A B t : @YoH (tysum A B) t -> rel t := ltac:(ii).
+Definition rel_prod A B t : @YoH (typrod A B) t -> rel t := ltac:(ii).
+Definition rel_arr A B t :
+  (@hasY (A ~> B) t \/ (halt t /\ (forall x, rel x -> rel (tapp t x)))) -> rel t :=
+  ltac:(compute; ii).
+
+Definition top_rel t : rel t -> @YoH tytop t := ltac:(ii).
+Definition bot_rel t : rel t -> @YoH tybot t := ltac:(ii).
+Definition real_rel t : rel t -> @YoH tyreal t := ltac:(ii).
+Definition sum_rel A B t : rel t -> @YoH (tysum A B) t := ltac:(ii).
+Definition prod_rel A B t : rel t -> @YoH (typrod A B) t := ltac:(ii).
+Definition arr_rel A B t : rel t ->
+  (@hasY (A ~> B) t \/ (halt t /\ (forall x, rel x -> rel (tapp t x)))) :=
+  ltac:(compute; ii).
+
 Definition tcrf { A B } (f f' : term (A ~> B)) x :
   transitive_closure red f f' -> transitive_closure red (tapp f x) (tapp f' x) :=
   ltac:(induction 1; eauto).
@@ -290,16 +308,63 @@ Definition transitive_closure_appx { A B } f x x' :
   transitive_closure red x x' ->
   transitive_closure red (@tapp A B f x) (tapp f x') :=
   ltac:(induction 2; eauto).
-  
+
+Inductive type_real_sub_exp : type -> type -> Prop :=
+| trse_sum_l { A B } : type_real_sub_exp A (tysum A B)
+| trse_sum_r { A B } : type_real_sub_exp B (tysum A B)
+| trse_prod_l { A B } : type_real_sub_exp A (typrod A B)
+| trse_prod_r { A B } : type_real_sub_exp B (typrod A B)
+| trse_arr_l { A B } : type_real_sub_exp A (tyarr A B)
+| trse_arr_r { A B } : type_real_sub_exp B (tyarr A B)
+| trse_trans { A B C } :
+    type_real_sub_exp A B -> type_real_sub_exp B C -> type_real_sub_exp A C.
+
+Fixpoint type_size (x : type) : nat :=
+  match x with
+  | tytop => 1
+  | tybot => 1
+  | tyreal => 1
+  | tysum A B => 1 + type_size A + type_size B
+  | typrod A B => 1 + type_size A + type_size B
+  | tyarr A B => 1 + type_size A + type_size B
+  end.
+
+Require Import Omega.
+
+Definition trse_ts x y : type_real_sub_exp x y -> type_size x < type_size y :=
+  ltac:(induction 1; simpl; omega).
+
+Definition trse_neq x y : type_real_sub_exp x y -> x <> y :=
+  ltac:(ii; subst; Apply trse_ts; omega).
+
+Definition hasY_dec A x : { @hasY A x } + { ~ hasY x }.
+  dependent induction x;
+    repeat
+      match goal with
+      | H : { _ } + { _ } |- _ => destruct H
+      end;
+    eauto; right; ii; dependent destruction H; eauto.
+  all: symmetry in x0.
+  all: eapply trse_neq; try (eexact x0).
+  eapply trse_trans; [| apply trse_arr_l].
+  eapply trse_trans; [| apply trse_arr_r].
+  all: try solve [econstructor].
+  eapply trse_trans; [| apply trse_arr_r].
+  solve [econstructor].
+  eapply trse_trans; [| apply trse_arr_r].
+  solve [econstructor].
+Defined.
+
 Definition rel_hold t x : @rel t x.
   induction x;
     compute in * |-;
                    repeat (destruct_exists || ii);
     eauto; try (compute; eauto; fail).
   + specialize (H1 x2); ii.
-  + right; ii; eauto.
-    fold (@rel A).
-    compute in H; ii; repeat destruct_exists; ii; work; eauto.
+  + apply rel_arr.
+    right; ii; eauto.
+    Apply bot_rel; unfold YoH in *; ii; work; eauto.
+    exfalso; compute in *; work; ii; eauto; work.
   + right; ii; eauto.
     fold (@rel (tyreal ~> tyreal)).
     compute in H; ii; repeat destruct_exists; ii; eauto.
@@ -324,7 +389,21 @@ Definition rel_hold t x : @rel t x.
   + admit.
   + admit.
   + admit.
-  + admit.
+  + apply rel_arr.
+    right; ii; eauto.
+    apply rel_arr.
+    Apply arr_rel; ii; eauto.
+    right; ii.
+    admit.
+    apply rel_arr.
+    right; ii; eauto.
+    admit.
+    Apply arr_rel; ii; eauto.
+    specialize (H1 x1); specialize (H4 x1); ii.
+    Apply arr_rel; ii.
+    dependent destruction H4; eauto.
+    specialize (H5 (tapp x0 x1)); ii.
+    admit. (*error: red does not preserve rel*)
   + admit.
   + admit.    
   + admit.
