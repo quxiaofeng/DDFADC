@@ -121,6 +121,9 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
 | rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
 | rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x').
 
+Hint Constructors red.
+Hint Resolve rtappx.
+
 Definition val_func { A B } {f : term (A ~> B)} {x : term A} : val (tapp f x) -> val f :=
   ltac:(intros H; dependent induction H; constructor; tauto).
 
@@ -216,4 +219,104 @@ Definition eval A x : { y | red x y } + { @val A x }.
   + dependent destruction x2; dependent destruction x2_1; work; [].
     dependent destruction x2_1_1; work; [].
     red_it.
+Defined.
+
+Inductive hasY : forall { x }, term x -> Prop :=
+| direct_Y A B : hasY (@tY A B)
+| left_Y A B l r : hasY l -> hasY (@tapp A B l r)
+| right_Y A B l r : hasY r -> hasY (@tapp A B l r).
+
+Hint Constructors hasY.
+
+Inductive transitive_closure { X } (p : X -> X -> Prop) : X -> X -> Prop :=
+| here x : transitive_closure p x x
+| step x y z : p x y -> transitive_closure p y z -> transitive_closure p x z.
+
+Hint Constructors transitive_closure.
+
+Definition halt { ty } (x : term ty) := exists y, transitive_closure red x y /\ val y.
+
+Hint Unfold halt.
+
+Inductive track { T } (t : T) : Prop :=
+| tracking.
+
+Hint Constructors track.
+
+Definition YoH { ty : type } (t : term ty) :=
+  hasY t \/ halt t.
+
+Definition rel { ty : type } : forall (t : term ty), Prop.
+  assert (track ty) by eauto.
+  dependent induction ty; intro.
+  + exact (YoH t).
+  + exact (YoH t). 
+  + exact (YoH t).
+  + exact (YoH t).
+  + exact (YoH t).
+  + exact (hasY t \/ (halt t /\ (forall x, IHty1 (tracking _) x -> IHty2 (tracking _) (tapp t x)))).
+Defined.
+
+Definition tcrf { A B } (f f' : term (A ~> B)) x :
+  transitive_closure red f f' -> transitive_closure red (tapp f x) (tapp f' x) :=
+  ltac:(induction 1; eauto).
+
+Hint Resolve tcrf.
+
+Definition tcrx { A B } (f : term (A ~> B)) x x' :
+  val f -> transitive_closure red x x' -> transitive_closure red (tapp f x) (tapp f x') :=
+  ltac:(induction 2; eauto).
+
+Hint Resolve tcrx.
+
+Definition hasY_rel t x : hasY x -> @rel t x.
+  intros; compute.
+  dependent destruction t; tauto.
+Defined.
+
+Hint Resolve hasY_rel.
+
+Definition rel_hold t x : @rel t x.
+  induction x;
+    compute in * |-;
+                   repeat (destruct_exists || ii);
+    eauto; try (compute; eauto; fail).
+  + specialize (H1 x2); ii.
+  + right; ii; eauto.
+    fold (@rel A).
+    compute in H; ii; repeat destruct_exists; ii; work; eauto.
+  + right; ii; eauto.
+    fold (@rel (tyreal ~> tyreal)).
+    compute in H; ii; repeat destruct_exists; ii; eauto.
+    right; ii; eauto.
+    admit.
+    compute in *; ii; repeat destruct_exists; ii; eauto.
+    right.
+    work.
+    exists (tlit (Rplus H2 H5)); ii; eauto.
+    admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.    
+  + admit.
+  + admit.
+  + admit.
+Admitted.
+
+Hint Constructors transitive_closure.
+
+Definition Y_or_val { ty } :
+  forall (x : term ty), hasY x \/ halt x.
+  intros x.
+  pose proof (rel_hold ty x).
+  induction ty; compute in *; ii.
 Defined.
