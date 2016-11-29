@@ -428,23 +428,64 @@ Ltac break_hasY :=
     end;
   try match_discharge_trse.
 
-Definition hasY_rel_back t x y : @red t x y -> hasY y -> hasY x :=
+Definition hasY_red_back t x y : @red t x y -> hasY y -> hasY x :=
   ltac:(intros H; dependent induction H; ii; break_hasY; eauto).
 
-Hint Resolve hasY_rel_back.
+Hint Resolve hasY_red_back.
 
-Definition rel_red_back t x y : red x y -> @rel t y -> rel x :=
+Ltac rel_unfold :=
+  try (Apply top_rel; apply rel_top; unfold YoH in *; ii; eauto);
+    try (Apply bot_rel; apply rel_bot; unfold YoH in *; ii; eauto);
+    try (Apply real_rel; apply rel_real; unfold YoH in *; ii; eauto);
+    try (Apply sum_rel; apply rel_sum; unfold YoH in *; ii; eauto);
+    try (Apply prod_rel; apply rel_prod; unfold YoH in *; ii; eauto);
+    try (Apply arr_rel; apply rel_arr; unfold YoH in *; ii; eauto).
+
+Definition rel_red_back t x y : @red t x y -> rel y -> rel x :=
   ltac:(
     induction t; intros H; dependent destruction H; ii; eauto;
-      try (Apply top_rel; apply rel_top; unfold YoH in *; ii; eauto);
-      try (Apply bot_rel; apply rel_bot; unfold YoH in *; ii; eauto);
-      try (Apply real_rel; apply rel_real; unfold YoH in *; ii; eauto);
-      try (Apply sum_rel; apply rel_sum; unfold YoH in *; ii; eauto);
-      try (Apply prod_rel; apply rel_prod; unfold YoH in *; ii; eauto);
-      try (Apply arr_rel; apply rel_arr; unfold YoH in *; ii; eauto);
-      right; ii; eauto).
+      rel_unfold; right; ii; eauto).
 
 Hint Resolve rel_red_back.
+
+Definition halt_red_preserve t x y : @red t x y -> halt x -> halt y.
+  intros H; dependent destruction H; unfold halt; ii; repeat destruct_exists; ii.
+  all: match goal with
+       | H : transitive_closure red _ _ |- _ =>
+         dependent destruction H
+       end.
+  all: try
+         match goal with
+         | H : val _ |- _ =>
+           Not ltac:(is_var z); solve [dependent destruction H]
+         end.
+  all: try (dependent destruction H; solve[eauto]).
+Admitted.
+
+Definition noY_rel_red_preserve t : forall x y, @red t x y -> (~ hasY x) -> rel x -> rel y.
+  induction t; ii; rel_unfold; eauto using halt_red_preserve; [].
+  right; ii; [eauto using halt_red_preserve|].
+  destruct (hasY_dec x0); [eauto|].
+  eapply IHt2; eauto.
+  let H := fresh in intros H; dependent destruction H; tauto.
+Defined.
+
+Definition hasY_trans_back t x y : transitive_closure (@red t) x y -> hasY y -> hasY x :=
+  ltac:(induction 1; eauto).
+
+Hint Resolve hasY_trans_back.
+
+Definition noY_rel_trans_preserve t x y :
+  transitive_closure (@red t) x y -> (~ hasY x) -> rel x -> rel y.
+  induction 1; ii; [].
+  eapply IHtransitive_closure; ii.
+  EApply hasY_red_back; solve [eauto].
+  eapply noY_rel_red_preserve; solve [eauto].
+Defined.
+
+Definition rel_trans_back t x y :
+  transitive_closure (@red t) x y -> rel y -> rel x :=
+  ltac:(induction 1; ii; eauto).
 
 Definition rel_hold t x : @rel t x.
   induction x;
@@ -459,7 +500,8 @@ Definition rel_hold t x : @rel t x.
   + right; ii; eauto.
     fold (@rel (tyreal ~> tyreal)).
     compute in H; ii; repeat destruct_exists; ii; eauto.
-    right; ii; eauto.
+    right; ii.
+    debug eauto 3.
     exists (tapp tplus H0); eauto.
     compute in *; ii; repeat destruct_exists; ii; eauto.
     right.
@@ -491,17 +533,41 @@ Definition rel_hold t x : @rel t x.
     right; ii; eauto.
     Apply rel_noY_halt; ii; [].
     unfold halt in *; repeat destruct_exists. 
-    exists (tapp (tapp tS H) n); ii; eauto.
-    eapply transitive_closure_transitive.
-    eapply transitive_closure_appf.
-    eapply transitive_closure_appx; [solve[eauto]|eassumption].
-    eapply transitive_closure_appx; solve[eauto].
-    Apply arr_rel; ii; eauto.
-    specialize (H1 x1); specialize (H4 x1); ii.
-    Apply arr_rel; ii.
-    dependent destruction H4; eauto.
-    specialize (H5 (tapp x0 x1)); ii.
-    admit.
+    ++ exists (tapp (tapp tS H) n); ii; eauto.
+       eapply transitive_closure_transitive.
+       eapply transitive_closure_appf.
+       eapply transitive_closure_appx; [solve [eauto]|eassumption].
+       eapply transitive_closure_appx; solve [eauto].
+    ++ Apply arr_rel; ii; eauto.
+       destruct (hasY_dec x1); eauto.
+       Apply rel_noY_halt; ii; [].
+       unfold halt in *; repeat destruct_exists; ii.
+       specialize (H1 n0); specialize (H4 n0); ii.
+       destruct (hasY_dec x1); eauto.       
+       assert (rel n0) by eauto using noY_rel_trans_preserve; ii.
+       destruct (hasY_dec x); eauto.
+       assert (rel (tapp H n0)).
+       eapply noY_rel_trans_preserve; [| |eassumption].
+       eapply transitive_closure_appf; assumption.
+       ii; break_hasY; ii.
+       pose proof (hasY_trans_back _ _ _ H5 H4); tauto.
+       Apply arr_rel.
+       Apply arr_rel; ii; [|].
+       break_hasY; eauto.
+       EApply hasY_trans_back; solve [eauto].
+       specialize (H13 (tapp H0 n0)); ii.
+       assert (rel (tapp H0 n0)) by admit; ii.
+       eapply rel_trans_back; [|eauto].
+       eapply transitive_closure_transitive.
+       eapply transitive_closure_appf.
+       eapply transitive_closure_appf.
+       eapply transitive_closure_appx; [eauto|eassumption].
+       eapply transitive_closure_transitive.
+       eapply transitive_closure_appf.
+       eapply transitive_closure_appx; eauto.
+       eapply transitive_closure_transitive.
+       eapply transitive_closure_appx; eauto.
+       eauto.
   + apply rel_arr.
     right; ii; eauto.
     apply rel_arr.
