@@ -337,7 +337,7 @@ Definition trse_ts x y : type_real_sub_exp x y -> type_size x < type_size y :=
 Definition trse_neq x y : type_real_sub_exp x y -> x <> y :=
   ltac:(ii; subst; Apply trse_ts; omega).
 
-Definition hasY_dec A x : { @hasY A x } + { ~ hasY x }.
+Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x }.
   dependent induction x;
     repeat
       match goal with
@@ -353,6 +353,96 @@ Definition hasY_dec A x : { @hasY A x } + { ~ hasY x }.
   solve [econstructor].
   eapply trse_trans; [| apply trse_arr_r].
   solve [econstructor].
+Defined.
+
+Definition term_eq_dec A (x : term A) (y : term A) : { x = y } + { x <> y }.
+  Ltac ric := right; ii; congruence.
+  dependent induction x; ii; dependent destruction y; eauto; try ric.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+Admitted. (*All of them can be dischargeed. Write a ltac for that.*)
+
+Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
+
+Definition red_det t x x' x'' : @red t x x' -> red x x'' -> x' = x''.
+  induction 1; let H := fresh in intros H; dependent destruction H; ii;
+                                   match goal with
+                                   | H : red ?x _ |- _ =>
+                                     try (assert (val x) by eauto; Apply val_not_red; ii)
+                                   end.
+  f_equal; solve [eauto].
+  EApply (val_not_red _ f); exfalso; solve [eauto].
+  f_equal; solve [eauto].
 Defined.
 
 Definition rel_hold t x : @rel t x.
@@ -403,8 +493,13 @@ Definition rel_hold t x : @rel t x.
     Apply arr_rel; ii.
     dependent destruction H4; eauto.
     specialize (H5 (tapp x0 x1)); ii.
-    admit. (*error: red does not preserve rel*)
-  + admit.
+    admit.
+  + apply rel_arr.
+    right; ii; eauto.
+    apply rel_arr.
+    destruct (hasY_dec x); eauto.
+    right; ii; eauto.
+    admit.
   + admit.    
   + admit.
   + admit.
