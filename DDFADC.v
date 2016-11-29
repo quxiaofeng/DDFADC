@@ -355,84 +355,47 @@ Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x }.
   solve [econstructor].
 Defined.
 
-Definition term_eq_dec A (x : term A) (y : term A) : { x = y } + { x <> y }.
-  Ltac ric := right; ii; congruence.
-  dependent induction x; ii; dependent destruction y; eauto; try ric.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-Admitted. (*All of them can be dischargeed. Write a ltac for that.*)
-
 Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
+
+Ltac get_trse x y :=
+  match y with
+  | typrod ?l ?r =>
+    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | typrod ?l ?r =>
+    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | tyarr ?l ?r =>
+    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | tyarr ?l ?r =>
+    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | tysum ?l ?r =>
+    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | tysum ?l ?r =>
+    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
+  | _ => assert (type_real_sub_exp x y) by econstructor
+  end.
+
+Ltac match_get_trse :=
+  match goal with
+  | H : @eq type ?x ?y |- _ => get_trse x y || get_trse y x
+  end.
+
+Ltac match_discharge_trse :=
+  match_get_trse; Apply trse_neq; congruence.
+
+Definition term_eq_dec
+           (rdec : forall l r : R, { l = r } + { l <> r })
+           A (x : term A) (y : term A)
+  : { x = y } + { x <> y }.
+  Ltac ric := right; ii; congruence.
+  dependent induction x; ii; dependent destruction y; eauto; try ric;
+    try match_discharge_trse.    
+  destruct (type_eq_dec A A0); subst; [|].
+  destruct (IHx1 y1), (IHx2 y2); subst; eauto;
+  right; intros H; inversion H;
+    repeat Apply (Eqdep_dec.inj_pair2_eq_dec type type_eq_dec); tauto.
+  right; intros H; inversion H; tauto.
+  destruct (rdec r r0); [left|right]; congruence.
+Defined.
 
 Definition red_det t x x' x'' : @red t x x' -> red x x'' -> x' = x''.
   induction 1; let H := fresh in intros H; dependent destruction H; ii;
@@ -444,6 +407,44 @@ Definition red_det t x x' x'' : @red t x x' -> red x x'' -> x' = x''.
   EApply (val_not_red _ f); exfalso; solve [eauto].
   f_equal; solve [eauto].
 Defined.
+
+Definition rel_noY_halt t x : @rel t x -> (~ hasY x) -> halt x :=
+  ltac:(ii; dependent destruction t; compute in *; ii).
+
+Definition halt_red_back t x y : @red t x y -> halt y -> halt x :=
+  ltac:(unfold halt; ii; destruct_exists; ii; eauto).
+
+Hint Resolve halt_red_back.
+
+Ltac break_hasY :=
+  repeat
+    match goal with
+    | H : hasY (tapp _ _) |- _ => dependent destruction H
+    | H : hasY (tlit _) |- _ => dependent destruction H
+    end;
+  try
+    match goal with
+    | H : hasY _ |- _ => solve[dependent destruction H]
+    end;
+  try match_discharge_trse.
+
+Definition hasY_rel_back t x y : @red t x y -> hasY y -> hasY x :=
+  ltac:(intros H; dependent induction H; ii; break_hasY; eauto).
+
+Hint Resolve hasY_rel_back.
+
+Definition rel_red_back t x y : red x y -> @rel t y -> rel x :=
+  ltac:(
+    induction t; intros H; dependent destruction H; ii; eauto;
+      try (Apply top_rel; apply rel_top; unfold YoH in *; ii; eauto);
+      try (Apply bot_rel; apply rel_bot; unfold YoH in *; ii; eauto);
+      try (Apply real_rel; apply rel_real; unfold YoH in *; ii; eauto);
+      try (Apply sum_rel; apply rel_sum; unfold YoH in *; ii; eauto);
+      try (Apply prod_rel; apply rel_prod; unfold YoH in *; ii; eauto);
+      try (Apply arr_rel; apply rel_arr; unfold YoH in *; ii; eauto);
+      right; ii; eauto).
+
+Hint Resolve rel_red_back.
 
 Definition rel_hold t x : @rel t x.
   induction x;
@@ -484,10 +485,17 @@ Definition rel_hold t x : @rel t x.
     apply rel_arr.
     Apply arr_rel; ii; eauto.
     right; ii.
-    admit.
+    unfold halt in *; repeat destruct_exists; ii; eauto.
     apply rel_arr.
+    destruct (hasY_dec x0); eauto.
     right; ii; eauto.
-    admit.
+    Apply rel_noY_halt; ii; [].
+    unfold halt in *; repeat destruct_exists. 
+    exists (tapp (tapp tS H) n); ii; eauto.
+    eapply transitive_closure_transitive.
+    eapply transitive_closure_appf.
+    eapply transitive_closure_appx; [solve[eauto]|eassumption].
+    eapply transitive_closure_appx; solve[eauto].
     Apply arr_rel; ii; eauto.
     specialize (H1 x1); specialize (H4 x1); ii.
     Apply arr_rel; ii.
@@ -499,6 +507,7 @@ Definition rel_hold t x : @rel t x.
     apply rel_arr.
     destruct (hasY_dec x); eauto.
     right; ii; eauto.
+    admit.
     admit.
   + admit.    
   + admit.
