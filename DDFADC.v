@@ -307,80 +307,105 @@ Inductive transitive_closure { X } (p : X -> X -> Prop) : X -> X -> Prop :=
 
 Hint Constructors transitive_closure.
 
-Definition halt { ty } (x : term ty) := exists y, transitive_closure red x y /\ val y.
+Definition eval_to { t } x y := transitive_closure red x y /\ @val t y.
+
+Hint Unfold eval_to.
+
+Definition halt { t } (x : term t) := exists y, eval_to x y.
 
 Hint Unfold halt.
-
-Definition YoH { ty : type } (t : term ty) :=
-  hasY t \/ halt t.
 
 Definition rel { ty : type } : forall (t : term ty), Prop.
   assert (track ty) by eauto.
   dependent induction ty; intro.
-  + assert (track tytop) by assumption;
-      exact (YoH t).
-  + assert (track tybot) by assumption;
-      exact (YoH t). 
-  + assert (track tyreal) by assumption;
-      exact (YoH t).
-  + assert (exists l r, track (tysum l r)) by (do 2 econstructor; eassumption);
-      exact (YoH t).
-  + assert (exists l r, track (typrod l r)) by (do 2 econstructor; eassumption);
-      exact (YoH t).
-  + assert (exists l r, track (tyarr l r)) by (do 2 econstructor; eassumption);
-      exact (hasY t \/
-           (halt t /\
-            (forall x, IHty1 (tracking _) x -> IHty2 (tracking _) (tapp t x)))).
+  + assert (track tytop) by assumption.
+    exact (halt t).
+  + assert (track tybot) by assumption.
+    exact (halt t). 
+  + assert (track tyreal) by assumption.
+    exact (halt t).
+  + assert (exists l r, track (tysum l r)) by (do 2 econstructor; eassumption).
+    exact ((exists l, eval_to t (tapp tleft l) /\
+                 IHty1 (tracking _) l) \/
+           (exists r, eval_to t (tapp tright r) /\
+                 IHty2 (tracking _) r)).
+  + assert (exists l r, track (typrod l r)) by (do 2 econstructor; eassumption).
+    exact (exists l r, eval_to t (tapp (tapp tmkprod l) r) /\
+                  IHty1 (tracking _) l /\
+                  IHty2 (tracking _) r).
+  + assert (exists l r, track (tyarr l r)) by (do 2 econstructor; eassumption).
+    exact (exists t', eval_to t t' /\
+                 (forall x, IHty1 (tracking _) x -> val x -> IHty2 (tracking _) (tapp t' x))).
 Defined.
 
-Definition hasY_rel t x : hasY x -> @rel t x.
-  intros; compute.
-  dependent destruction t; tauto.
-Defined.
+Definition rel_top t : @halt tytop t -> rel t := ltac:(ii).
 
-Hint Resolve hasY_rel.
+Definition rel_bot t : @halt tybot t -> rel t := ltac:(ii).
 
-Definition rel_top t : @YoH tytop t -> rel t := ltac:(ii).
-Definition rel_bot t : @YoH tybot t -> rel t := ltac:(ii).
-Definition rel_real t : @YoH tyreal t -> rel t := ltac:(ii).
-Definition rel_sum A B t : @YoH (tysum A B) t -> rel t := ltac:(ii).
-Definition rel_prod A B t : @YoH (typrod A B) t -> rel t := ltac:(ii).
+Definition rel_real t : @halt tyreal t -> rel t := ltac:(ii).
+
+Definition rel_sum A B t :
+  ((exists l, eval_to t (tapp tleft l) /\ @rel A l) \/
+   (exists r, eval_to t (tapp tright r) /\ @rel B r)) -> rel t :=
+  ltac:(compute; tauto).
+
+Definition rel_prod A B t :
+  (exists l r, eval_to t (tapp (tapp tmkprod l) r) /\
+          @rel A l /\
+          @rel B r) -> rel t := ltac:(ii).
+
 Definition rel_arr A B t :
-  (@hasY (A ~> B) t \/ (halt t /\ (forall x, rel x -> rel (tapp t x)))) -> rel t :=
+  (exists t', @eval_to (A ~> B) t t' /\
+         (forall x, rel x -> val x -> rel (tapp t' x))) -> rel t :=
   ltac:(compute; ii).
 
-Definition top_rel t : rel t -> @YoH tytop t := ltac:(ii).
-Definition bot_rel t : rel t -> @YoH tybot t := ltac:(ii).
-Definition real_rel t : rel t -> @YoH tyreal t := ltac:(ii).
-Definition sum_rel A B t : rel t -> @YoH (tysum A B) t := ltac:(ii).
-Definition prod_rel A B t : rel t -> @YoH (typrod A B) t := ltac:(ii).
+Definition top_rel t : rel t -> @halt tytop t := ltac:(ii).
+
+Definition bot_rel t : rel t -> @halt tybot t := ltac:(ii).
+
+Definition real_rel t : rel t -> @halt tyreal t := ltac:(ii).
+
+Definition sum_rel A B t :
+  rel t -> ((exists l, eval_to t (tapp tleft l) /\ @rel A l) \/
+           (exists r, eval_to t (tapp tright r) /\ @rel B r)) :=
+  ltac:(ii).
+
+Definition prod_rel A B t :
+  rel t -> (exists l r, eval_to t (tapp (tapp tmkprod l) r) /\
+                  @rel A l /\
+                  @rel B r) := ltac:(ii).
+
 Definition arr_rel A B t : rel t ->
-  (@hasY (A ~> B) t \/ (halt t /\ (forall x, rel x -> rel (tapp t x)))) :=
+  (exists t', @eval_to (A ~> B) t t' /\
+         (forall x, rel x -> val x -> rel (tapp t' x))) :=
   ltac:(compute; ii).
 
-Ltac rel_unfold :=
-  try (Apply top_rel; apply rel_top; unfold YoH in *; ii; eauto);
-    try (Apply bot_rel; apply rel_bot; unfold YoH in *; ii; eauto);
-    try (Apply real_rel; apply rel_real; unfold YoH in *; ii; eauto);
-    try (Apply sum_rel; apply rel_sum; unfold YoH in *; ii; eauto);
-    try (Apply prod_rel; apply rel_prod; unfold YoH in *; ii; eauto);
-    try (Apply arr_rel; apply rel_arr; unfold YoH in *; ii; eauto).
+Ltac unfold_rel :=
+  repeat
+    (try
+       match goal with
+       | H : @rel tytop _ |- _ =>
+         apply top_rel in H; ii
+       | H : @rel tybot _ |- _ =>
+         apply bot_rel in H; ii
+       | H : @rel tyreal _ |- _ =>
+         apply real_rel in H; ii
+       | H : @rel (tysum _ _) _ |- _ =>
+         apply sum_rel in H; repeat (destruct_exists || ii)
+       | H : @rel (typrod _ _) _ |- _ =>
+         apply prod_rel in H; repeat (destruct_exists || ii)
+       | H : @rel (tyarr _ _) _ |- _ =>
+         apply arr_rel in H; repeat (destruct_exists || ii)
+       end;
+     try (apply rel_top; ii);
+     try (apply rel_bot; ii);
+     try (apply rel_real; ii);
+     try (apply rel_sum; repeat (destruct_exists || ii));
+     try (apply rel_prod; repeat (destruct_exists || ii));
+     try (apply rel_arr; repeat (destruct_exists || ii))).
 
-Definition rel_YoH t te : @rel t te -> YoH te.
-  destruct t; compute in *; ii.
-Defined.
-
-Definition tcrf { A B } (f f' : term (A ~> B)) x :
-  transitive_closure red f f' -> transitive_closure red (tapp f x) (tapp f' x) :=
-  ltac:(induction 1; eauto).
-
-Hint Resolve tcrf.
-
-Definition tcrx { A B } (f : term (A ~> B)) x x' :
-  val f -> transitive_closure red x x' -> transitive_closure red (tapp f x) (tapp f x') :=
-  ltac:(induction 2; eauto).
-
-Hint Resolve tcrx.
+Definition rel_halt t te : @rel t te -> halt te :=
+  ltac:(destruct t; ii; unfold_rel; eauto 6).
 
 Definition transitive_closure_transitive { T } p (x y z : T) :
   transitive_closure p x y -> transitive_closure p y z -> transitive_closure p x z :=
@@ -397,23 +422,14 @@ Definition transitive_closure_appx { A B } f x x' :
   transitive_closure red (@tapp A B f x) (tapp f x') :=
   ltac:(induction 2; eauto).
 
-Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x }.
-  dependent induction x;
-    repeat
-      match goal with
-      | H : { _ } + { _ } |- _ => destruct H
-      end;
-    eauto; right; ii; dependent destruction H; eauto.
-  all: symmetry in x0.
-  all: eapply trse_neq; try (eexact x0).
-  eapply trse_trans; [| apply trse_arr_l].
-  eapply trse_trans; [| apply trse_arr_r].
-  all: try solve [econstructor].
-  eapply trse_trans; [| apply trse_arr_r].
-  solve [econstructor].
-  eapply trse_trans; [| apply trse_arr_r].
-  solve [econstructor].
-Defined.
+Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x } :=
+  ltac:(
+    dependent induction x;
+      repeat
+        match goal with
+        | H : { _ } + { _ } |- _ => destruct H
+        end;
+      eauto; right; ii; dependent destruction H; eauto; match_discharge_trse).
 
 Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
 
@@ -423,31 +439,29 @@ Definition term_eq_dec
   : { x = y } + { x <> y }.
   Ltac ric := right; ii; congruence.
   dependent induction x; ii; dependent destruction y; eauto; try ric;
-    try match_discharge_trse.    
-  destruct (type_eq_dec A A0); subst; [|].
-  destruct (IHx1 y1), (IHx2 y2); subst; eauto;
-  right; intros H; inversion H;
-    repeat Apply (Eqdep_dec.inj_pair2_eq_dec type type_eq_dec); tauto.
-  right; intros H; inversion H; tauto.
-  destruct (rdec r r0); [left|right]; congruence.
+    try match_discharge_trse.
+  + destruct (type_eq_dec A A0); subst.
+     ++ destruct (IHx1 y1), (IHx2 y2); subst; eauto;
+          right; intros H; inversion H;
+            repeat Apply (Eqdep_dec.inj_pair2_eq_dec type type_eq_dec); tauto.
+     ++ right; intros H; inversion H; tauto.
+  + destruct (rdec r r0); [left|right]; congruence.
 Defined.
 
-Definition red_det t x x' x'' : @red t x x' -> red x x'' -> x' = x''.
-  induction 1; let H := fresh in intros H; dependent destruction H; ii;
-                                   match goal with
-                                   | H : red ?x _ |- _ =>
-                                     try (assert (val x) by eauto; Apply val_not_red; ii)
-                                   end.
+Definition red_det { t x x' x'' } : @red t x x' -> red x x'' -> x' = x''.
+  induction 1;
+    let H := fresh in intros H; dependent destruction H; ii;
+                        match goal with
+                        | H : red ?x _ |- _ =>
+                          try (assert (val x) by eauto; Apply val_not_red; ii)
+                        end.
   f_equal; solve [eauto].
   EApply (val_not_red _ f); exfalso; solve [eauto].
   f_equal; solve [eauto].
 Defined.
 
-Definition rel_noY_halt t x : @rel t x -> (~ hasY x) -> halt x :=
-  ltac:(ii; dependent destruction t; compute in *; ii).
-
 Definition halt_red_back t x y : @red t x y -> halt y -> halt x :=
-  ltac:(unfold halt; ii; destruct_exists; ii; eauto).
+  ltac:(unfold halt, eval_to; ii; destruct_exists; ii; eauto).
 
 Hint Resolve halt_red_back.
 
@@ -468,10 +482,15 @@ Definition hasY_red_back t x y : @red t x y -> hasY y -> hasY x :=
 
 Hint Resolve hasY_red_back.
 
-Definition rel_red_back t x y : @red t x y -> rel y -> rel x :=
-  ltac:(
-    induction t; intros H; dependent destruction H; ii; eauto;
-      rel_unfold; right; ii; eauto).
+Definition rel_red_back t : forall x y, @red t x y -> rel y -> rel x :=
+  ltac:(induction t;
+        intros H;
+        dependent destruction H;
+        ii;
+        unfold_rel;
+        unfold eval_to in *;
+        ii;
+        eauto 8).
 
 Hint Resolve rel_red_back.
 
@@ -483,36 +502,43 @@ Definition red_app_arg_det {A B : type} (f : term (A ~> B)) (x x' : term A) y :
   val f -> red x x' -> red (tapp f x) y -> y = tapp f x' :=
   ltac:(intros; eapply red_det; [eassumption|solve [eauto]]).
 
+Ltac use_red_det :=
+  repeat (
+      match goal with
+      | L : red ?x ?y, R : red ?x ?z |- _ =>
+        pose proof (red_det L R); subst; clear R
+      end).
+
 Definition halt_red_preserve t x y : @red t x y -> halt x -> halt y.
-  intros H; dependent destruction H; unfold halt; ii; repeat destruct_exists; ii;
-    match goal with
-    | H : transitive_closure red _ _ |- _ =>
-      dependent destruction H
-    end;
-    try
-      match goal with
-      | H : val _ |- _ =>
-        Not ltac:(is_var z); solve [dependent destruction H]
-      end;
-    try (dependent destruction H; solve[eauto]);
-    try
-      match goal with
-      | H : red _ _ |- _ =>
-        dependent destruction H; [solve [eauto]| |];
-          Apply red_not_val; exfalso; ii; solve [eauto]
-      end.
-  + Apply @val_func; Apply red_not_val; tauto.
-  + EApply @red_app_func_det; [|eassumption]; subst; eauto.
-  + Apply @val_arg; Apply red_not_val; tauto.
-  + EApply @red_app_arg_det; [|eassumption|eassumption]; subst; eauto.
+  intros R H.
+  destruct H as [? [H (*bug: using [] will not work*)]]; destruct H; use_red_det; eauto.
+  Apply red_not_val; tauto.
 Defined.
 
-Definition noY_rel_red_preserve t : forall x y, @red t x y -> (~ hasY x) -> rel x -> rel y.
-  induction t; ii; rel_unfold; eauto using halt_red_preserve; [].
-  right; ii; [eauto using halt_red_preserve|].
-  destruct (hasY_dec x0); [eauto|].
-  eapply IHt2; eauto.
-  let H := fresh in intros H; dependent destruction H; tauto.
+Definition red_trans_val { t x y z } :
+  @red t x y ->
+  transitive_closure red x z ->
+  val z ->
+  transitive_closure red y z.
+  destruct 2; ii; use_red_det; eauto.
+  Apply red_not_val; tauto.
+Defined.
+
+Ltac use_red_trans_val :=
+  repeat (
+      match goal with
+      | L : red ?x ?y, R : transitive_closure red ?x ?z |- _ =>
+        let H := fresh in
+        assert (val z) as H by eauto;
+        pose proof (red_trans_val L R H); clear R
+      end).
+
+Definition rel_red_preserve t : forall x y, @red t x y -> rel x -> rel y.
+  induction t; ii; unfold_rel; unfold eval_to in *; eauto using halt_red_preserve.
+  left; econstructor; ii; eauto; []; use_red_trans_val; tauto.
+  right; econstructor; ii; eauto; []; use_red_trans_val; tauto.
+  do 2 econstructor; ii; eauto; []; use_red_trans_val; tauto.
+  econstructor; ii; use_red_trans_val; eauto.  
 Defined.
 
 Definition hasY_trans_back t x y : transitive_closure (@red t) x y -> hasY y -> hasY x :=
@@ -520,12 +546,11 @@ Definition hasY_trans_back t x y : transitive_closure (@red t) x y -> hasY y -> 
 
 Hint Resolve hasY_trans_back.
 
-Definition noY_rel_trans_preserve t x y :
-  transitive_closure (@red t) x y -> (~ hasY x) -> rel x -> rel y.
+Definition rel_trans_preserve t x y :
+  transitive_closure (@red t) x y -> rel x -> rel y.
   induction 1; ii; [].
   eapply IHtransitive_closure; ii.
-  EApply hasY_red_back; solve [eauto].
-  eapply noY_rel_red_preserve; solve [eauto].
+  eapply rel_red_preserve; solve [eauto].
 Defined.
 
 Definition rel_trans_back t x y :
@@ -537,41 +562,21 @@ Ltac Deduct t :=
   | H : _ |- _ => pose proof H; apply t in H
   end.
 
-Definition rel_arr' A B f :
-  (@hasY (A ~> B) f \/
-   (exists f',
-       transitive_closure red f f' /\
-       val f' /\
-       (forall x, val x -> rel x -> rel (tapp f' x)))) ->
-  rel f.
-  ii; [solve [eauto]|].
-  repeat destruct_exists; ii.
-  apply rel_arr; right; ii; [solve [eauto]|].
-  Deduct rel_YoH; unfold YoH in *; ii; [solve [eauto]|].
-  unfold halt in *; repeat destruct_exists; ii.  
-  specialize (H3 _ H7).
-  destruct (hasY_dec x); [solve [eauto]|].
-  Deduct noY_rel_trans_preserve; ii; [].
-  eapply rel_trans_back; [|].
-  + eapply transitive_closure_transitive; [|].
-    eapply tcrf; eassumption.
-    eapply tcrx; eassumption.
-  + eassumption.
-Defined.
-
-Definition rel_arr'' A B f :
-  (@val (A ~> B) f /\
-   (forall x, val x -> rel x -> rel (tapp f x))) ->
-  rel f :=
-  ltac:(ii; eapply rel_arr'; right; econstructor; ii; eauto).
-
-Ltac rel_arr''' := apply rel_arr''; ii; [solve [eauto]|].
-
 Ltac goal_rel_step :=
   eapply rel_red_back; [solve [eauto]|].
 
-Definition rel_app { A B } f x : rel f -> rel x -> rel (@tapp A B f x) :=
-  ltac:(ii; Apply arr_rel; ii; eauto).
+Definition rel_app { A B } f x : rel f -> rel x -> rel (@tapp A B f x). 
+  ii; Apply arr_rel; destruct_exists; unfold eval_to in *; ii.
+  Deduct rel_halt;
+    unfold halt, eval_to in *;
+    destruct_exists; ii.
+  eapply rel_trans_back.
+  eapply transitive_closure_transitive.
+  eapply transitive_closure_appf; solve [eauto].
+  eapply transitive_closure_appx; solve [eauto].
+  eapply H3; eauto.
+  eapply rel_trans_preserve; eassumption.
+Defined.
 
 Hint Resolve rel_app.
 
@@ -579,35 +584,51 @@ Definition rel_lit r : rel (tlit r) := ltac:(compute; eauto).
 
 Hint Resolve rel_lit.
 
-Definition rel_hold t x : @rel t x.
+Definition trans_red_val_eq { t x y } :
+  transitive_closure (@red t) x y -> val x -> x = y :=
+  ltac:(destruct 1; try Apply red_not_val; tauto).
+
+Ltac use_trans_red_val_eq :=
+  repeat
+    match goal with
+    | H : transitive_closure red ?x _, V : val ?x |- _ =>
+      pose proof (trans_red_val_eq H V); clear H; subst
+    end.
+
+Definition noY_split A B f x : ~ hasY (@tapp A B f x) -> ~ hasY f /\ ~ hasY x :=
+  ltac:(ii; eauto).
+
+Definition rel_hold t x (_ : ~ hasY x) : @rel t x.
   induction x;
     try (compute; solve [eauto]);
     repeat (
-        try (Apply arr_rel; ii; [solve [eauto]|]);
-        try rel_arr''';
         try goal_rel_step;
+        try (econstructor; ii; [solve [eauto]|solve [eauto]|]);
+        unfold_rel;
+        unfold halt, eval_to in *;
+        use_trans_red_val_eq;
+        try Apply noY_split;
+        ii;
         work);
     eauto.
-  all: try (eapply rel_sum; unfold YoH in *; right; eauto).  
-
-  Deduct @vsum.
-  work.
-  goal_rel_step.
-  eapply H4.
-  admit.
-  goal_rel_step.
-  eapply H7.
-  admit.
-  admit.
-  Deduct @vprod.
-  work.
-  goal_rel_step.
-  admit.
-  Deduct @vprod.
-  work.
-  goal_rel_step.
-  admit.
-Admitted.
+  + eapply rel_trans_back.
+    eapply transitive_closure_appf; try eassumption.
+    Deduct rel_halt; unfold halt, eval_to in *; destruct_exists; ii.
+    eapply rel_trans_back.
+    eapply transitive_closure_appx; eauto.
+    apply H5; eauto; [].
+    eapply rel_trans_preserve; eassumption.
+  + left; econstructor; ii; solve [eauto].
+  + right; econstructor; ii; solve [eauto].
+  + do 2 econstructor; ii; solve [eauto].
+  + specialize (H9 _ H5 H8).
+    pose proof (rel_halt _ _ H9); unfold halt, eval_to in *; destruct_exists; ii.
+    eapply rel_trans_back.
+    eapply transitive_closure_appx; eassumption.
+    eapply H4; eauto; [].
+    eapply rel_trans_preserve; eassumption.
+  + exfalso; eauto.
+Defined.
 
 Hint Constructors transitive_closure.
 
@@ -615,5 +636,6 @@ Definition Y_or_val { ty } :
   forall (x : term ty), hasY x \/ halt x.
   intros x.
   pose proof (rel_hold ty x).
-  induction ty; compute in *; ii.
+  destruct (hasY_dec x); ii.
+  Apply rel_halt; ii.
 Defined.
