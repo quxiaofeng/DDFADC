@@ -501,7 +501,6 @@ Definition rel_hold t x : @rel t x.
     fold (@rel (tyreal ~> tyreal)).
     compute in H; ii; repeat destruct_exists; ii; eauto.
     right; ii.
-    debug eauto 3.
     exists (tapp tplus H0); eauto.
     compute in *; ii; repeat destruct_exists; ii; eauto.
     right.
