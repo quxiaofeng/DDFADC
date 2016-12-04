@@ -1,6 +1,6 @@
 Require Export Program.
 
-Require Import CoqUtil.Tactic.
+Require Import CoqUtil.Tactic CoqUtil.MoreRelations.
 
 Inductive type :=
 | tytop
@@ -192,16 +192,6 @@ Ltac work :=
 
 Ltac dd1 := let x := fresh in intros x; dependent destruction x.
 
-Inductive type_real_sub_exp : type -> type -> Prop :=
-| trse_sum_l { A B } : type_real_sub_exp A (tysum A B)
-| trse_sum_r { A B } : type_real_sub_exp B (tysum A B)
-| trse_prod_l { A B } : type_real_sub_exp A (typrod A B)
-| trse_prod_r { A B } : type_real_sub_exp B (typrod A B)
-| trse_arr_l { A B } : type_real_sub_exp A (tyarr A B)
-| trse_arr_r { A B } : type_real_sub_exp B (tyarr A B)
-| trse_trans { A B C } :
-    type_real_sub_exp A B -> type_real_sub_exp B C -> type_real_sub_exp A C.
-
 Fixpoint type_size (x : type) : nat :=
   match x with
   | tytop => 1
@@ -214,36 +204,8 @@ Fixpoint type_size (x : type) : nat :=
 
 Require Import Omega.
 
-Definition trse_ts x y : type_real_sub_exp x y -> type_size x < type_size y :=
-  ltac:(induction 1; simpl; omega).
-
-Definition trse_neq x y : type_real_sub_exp x y -> x <> y :=
-  ltac:(ii; subst; Apply trse_ts; omega).
-
-Ltac get_trse x y :=
-  match y with
-  | typrod ?l ?r =>
-    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | typrod ?l ?r =>
-    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | tyarr ?l ?r =>
-    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | tyarr ?l ?r =>
-    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | tysum ?l ?r =>
-    get_trse x l; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | tysum ?l ?r =>
-    get_trse x r; assert (type_real_sub_exp x y) by (econstructor; eauto; econstructor)
-  | _ => assert (type_real_sub_exp x y) by econstructor
-  end.
-
-Ltac match_get_trse :=
-  match goal with
-  | H : @eq type ?x ?y |- _ => get_trse x y || get_trse y x
-  end.
-
-Ltac match_discharge_trse :=
-  match_get_trse; Apply trse_neq; congruence.
+Ltac discharge_type_eq :=
+  repeat (Apply (f_equal type_size)); simpl in *; omega.
 
 Inductive track { T } (t : T) : Prop :=
 | tracking.
@@ -300,12 +262,6 @@ Inductive hasY : forall { x }, term x -> Prop :=
 | right_Y A B l r : hasY r -> hasY (@tapp A B l r).
 
 Hint Constructors hasY.
-
-Inductive transitive_closure { X } (p : X -> X -> Prop) : X -> X -> Prop :=
-| here x : transitive_closure p x x
-| step x y z : p x y -> transitive_closure p y z -> transitive_closure p x z.
-
-Hint Constructors transitive_closure.
 
 Definition eval_to { t } x y := transitive_closure red x y /\ @val t y.
 
@@ -407,10 +363,6 @@ Ltac unfold_rel :=
 Definition rel_halt t te : @rel t te -> halt te :=
   ltac:(destruct t; ii; unfold_rel; eauto 6).
 
-Definition transitive_closure_transitive { T } p (x y z : T) :
-  transitive_closure p x y -> transitive_closure p y z -> transitive_closure p x z :=
-  ltac:(induction 1; eauto).
-
 Definition transitive_closure_appf { A B } f f' x :
   transitive_closure red f f' ->
   transitive_closure red (@tapp A B f x) (tapp f' x) :=
@@ -429,7 +381,7 @@ Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x } :=
         match goal with
         | H : { _ } + { _ } |- _ => destruct H
         end;
-      eauto; right; ii; dependent destruction H; eauto; match_discharge_trse).
+      eauto; right; ii; dependent destruction H; eauto; discharge_type_eq).
 
 Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
 
@@ -439,7 +391,7 @@ Definition term_eq_dec
   : { x = y } + { x <> y }.
   Ltac ric := right; ii; congruence.
   dependent induction x; ii; dependent destruction y; eauto; try ric;
-    try match_discharge_trse.
+    try discharge_type_eq.
   + destruct (type_eq_dec A A0); subst.
      ++ destruct (IHx1 y1), (IHx2 y2); subst; eauto;
           right; intros H; inversion H;
@@ -475,7 +427,7 @@ Ltac break_hasY :=
     match goal with
     | H : hasY _ |- _ => solve[dependent destruction H]
     end;
-  try match_discharge_trse.
+  try discharge_type_eq.
 
 Definition hasY_red_back t x y : @red t x y -> hasY y -> hasY x :=
   ltac:(intros H; dependent induction H; ii; break_hasY; eauto).
