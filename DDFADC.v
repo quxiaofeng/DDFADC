@@ -595,24 +595,58 @@ Class FTG (repr : type -> Type) :=
     fapp { A B } : repr (A ~> B) -> repr A -> repr B;
     ftt : repr tytop;
     fexf { A } : repr (tybot ~> A);
+    fexf_ { A } : _  (*bug? A will not be implicit without : _*) := fapp (@fexf A);
     flit : R -> repr tyreal;
     fplus : repr (tyreal ~> tyreal ~> tyreal);
+    fplus_ := fapp fplus;
+    fplus__ x := fapp (fplus_ x);
     fminus : repr (tyreal ~> tyreal ~> tyreal);
+    fminus_ := fapp fminus;
+    fminus__ x := fapp (fminus_ x);
     fmult : repr (tyreal ~> tyreal ~> tyreal);
+    fmult_ := fapp fmult;
+    fmult__ x := fapp (fmult_ x);
     fdiv : repr (tyreal ~> tyreal ~> tyreal);
+    fdiv_ := fapp fdiv;
+    fdiv__ x := fapp (fdiv_ x);
     fleft { A B } : repr (A ~> tysum A B);
+    fleft_ { A B } : _ := fapp (@fleft A B);
     fright { A B } : repr (B ~> tysum A B);
+    fright_ { A B } : _ := fapp (@fright A B);
     fsummatch { A B C } : repr (tysum A B ~> (A ~> C) ~> (B ~> C) ~> C);
+    fsummatch_ { A B C } : _ := fapp (@fsummatch A B C);
+    fsummatch__ { A B C } f : _ := fapp (@fsummatch_ A B C f);
+    fsummatch___ { A B C } f g : _ := fapp (@fsummatch__ A B C f g);
     fmkprod { A B } : repr (A ~> B ~> typrod A B);
+    fmkprod_ { A B } : _ := fapp (@fmkprod A B);
+    fmkprod__ { A B } x : _ := fapp (@fmkprod_ A B x);
     fzro { A B } : repr (typrod A B ~> A);
+    fzro_ { A B } : _ := fapp (@fzro A B);
     ffst { A B } : repr (typrod A B ~> B);
+    ffst_ { A B } : _ := fapp (@ffst A B);
     fS { A B C } : repr ((A ~> B ~> C) ~> (A ~> B) ~> (A ~> C));
+    fS_ { A B C } : _ := fapp (@fS A B C);
+    fS__ { A B C } f : _ := fapp (@fS_ A B C f);
+    fS___ { A B C } f x : _ := fapp (@fS__ A B C f x);
     fK { A B } : repr (A ~> B ~> A);
+    fK_ { A B } : _ := fapp (@fK A B);
+    fK__ { A B } x : _ := fapp (@fK_ A B x);
     fI { A } : repr (A ~> A);
+    fI_ { A } : _ := fapp (@fI A);
     fB { A B C } : repr ((B ~> C) ~> (A ~> B) ~> (A ~> C));
+    fB_ { A B C } : _ := fapp (@fB A B C);
+    fB__ { A B C } f : _ := fapp (@fB_ A B C f);
+    fB___ { A B C } f g : _ := fapp (@fB__ A B C f g);
     fC { A B C } : repr ((A ~> B ~> C) ~> (B ~> A ~> C));
+    fC_ { A B C } : _ := fapp (@fC A B C);
+    fC__ { A B C } f : _ := fapp (@fC_ A B C f);
+    fC___ { A B C } f g : _ := fapp (@fC__ A B C f g);
     fW { A B } : repr ((A ~> A ~> B) ~> (A ~> B));
-    fY { A B } : repr (((A ~> B) ~> (A ~> B)) ~> (A ~> B))
+    fW_ { A B } : _ := fapp (@fW A B);
+    fW__ { A B } f : _ := fapp (@fW_ A B f);
+    fY { A B } : repr (((A ~> B) ~> (A ~> B)) ~> (A ~> B));
+    fY_ { A B } : _ := fapp (@fY A B);
+    fY__ { A B } f : _ := fapp (@fY_ A B f)
   }.
 
 Instance Eval : FTG term :=
@@ -672,6 +706,12 @@ Instance Next repr Arg { orig : FTG repr } :
     fY A B := inl fY
   }.
 
+Definition flam { repr Arg A } { orig : FTG repr } (exp : repr A + repr (Arg ~> A)) :=
+  match exp with
+  | inl exp' => fapp fK exp'
+  | inr exp' => exp'
+  end.
+
 Definition Term A := forall { repr } { ftg : FTG repr }, repr A.
 
 Instance GetTerm : FTG Term :=
@@ -697,4 +737,41 @@ Instance GetTerm : FTG Term :=
     fC A B C := fun _ _ => fC;
     fW A B := fun _ _ => fW;
     fY A B := fun _ _ => fY
+  }.
+
+Class Gradient A :=
+  {
+    gzro : Term A;
+    gplus : Term (A ~> A ~> A);
+    gplus_ : Term A -> Term (A ~> A) := fapp gplus;
+    gplus__ : Term A -> Term A -> Term A := fun x => fapp (gplus_ x);
+    gmult : Term (tyreal ~> A ~> A);
+    gmult_ : Term tyreal -> Term (A ~> A) := fapp gmult;
+    gmult__ : Term tyreal -> Term A -> Term A := fun x => fapp (gmult_ x)
+  }.
+
+Instance GReal : Gradient tyreal :=
+  {
+    gzro := flit R0;
+    gplus := fplus;
+    gmult := fmult
+  }.
+
+Instance GProd A B { GA : Gradient A } { GB : Gradient B } : Gradient (typrod A B) :=
+  {
+    gzro := fapp (fapp fmkprod gzro) gzro;
+    gplus := flam (flam (fmkprod__
+                           (fapp (fapp (inl (inl gplus))
+                                       (fzro_ (inl (inr fI))))
+                                 (fzro_ (inr fI)))
+                           (fapp (fapp (inl (inl gplus))
+                                       (ffst_ (inl (inr fI))))
+                                 (ffst_ (inr fI)))));
+    gmult := flam (flam (fmkprod__
+                           (fapp (fapp (inl (inl gmult))
+                                       (inl (inr fI)))
+                                 (fzro_ (inr fI)))
+                           (fapp (fapp (inl (inl gmult))
+                                       (inl (inr fI)))
+                                 (ffst_ (inr fI)))))
   }.
