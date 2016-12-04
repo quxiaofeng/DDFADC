@@ -750,6 +750,13 @@ Class Gradient A :=
     gmult__ : Term tyreal -> Term A -> Term A := fun x => fapp (gmult_ x)
   }.
 
+Instance GUnit : Gradient tytop :=
+  {
+    gzro := ftt;
+    gplus := fK_ (fK_ ftt);
+    gmult := fK_ (fK_ ftt)
+  }.
+
 Instance GReal : Gradient tyreal :=
   {
     gzro := flit R0;
@@ -757,21 +764,51 @@ Instance GReal : Gradient tyreal :=
     gmult := fmult
   }.
 
+Definition lift { repr Arg A } : repr A -> repr A + repr (Arg ~> A) := inl.
+Definition var { repr A } { ftg : FTG repr } : repr A + repr (A ~> A) := inr fI.
+
 Instance GProd A B { GA : Gradient A } { GB : Gradient B } : Gradient (typrod A B) :=
   {
     gzro := fapp (fapp fmkprod gzro) gzro;
     gplus := flam (flam (fmkprod__
-                           (fapp (fapp (inl (inl gplus))
-                                       (fzro_ (inl (inr fI))))
-                                 (fzro_ (inr fI)))
-                           (fapp (fapp (inl (inl gplus))
-                                       (ffst_ (inl (inr fI))))
-                                 (ffst_ (inr fI)))));
+                           (fapp (fapp (lift (lift gplus))
+                                       (fzro_ (lift var)))
+                                 (fzro_ var))
+                           (fapp (fapp (lift (lift gplus))
+                                       (ffst_ (lift var)))
+                                 (ffst_ var))));
     gmult := flam (flam (fmkprod__
-                           (fapp (fapp (inl (inl gmult))
-                                       (inl (inr fI)))
-                                 (fzro_ (inr fI)))
-                           (fapp (fapp (inl (inl gmult))
-                                       (inl (inr fI)))
-                                 (ffst_ (inr fI)))))
+                           (fapp (fapp (lift (lift gmult))
+                                       (lift var))
+                                 (fzro_ var))
+                           (fapp (fapp (lift (lift gmult))
+                                       (lift var))
+                                 (ffst_ var))))
+  }.
+
+Instance GRealArr A { GA : Gradient A } : Gradient (tyreal ~> A) :=
+  {
+    gzro := fK_ gzro;
+    gplus :=
+      let n := Next _ tyreal in
+      flam (flam  (flam
+                     (fapp
+                        (fapp (lift (lift (lift (gplus))))
+                              (fapp (lift var) var))
+                        (fapp (lift (lift var)) var))));
+    gmult := flam (flam (fB__ var (fmult_ (lift var))))
+  }.
+
+Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
+         { GA : Gradient A } { GB : Gradient B } { GC : Gradient C } :
+  Gradient (typrod A B ~> C) :=
+  {
+    gzro := fK_ gzro;
+    gmult := flam (flam (fB__ var (lift (fapp (lift gmult) var))));
+    gplus :=
+      let abcac : Term ((typrod A B ~> C) ~> (A ~> C)) :=
+          (fC__ fB (fC__ fmkprod gzro)) in
+      let abcbc : Term ((typrod A B ~> C) ~> (B ~> C)) :=
+          (fC__ fB (fmkprod_ gzro)) in
+      _
   }.
