@@ -582,8 +582,6 @@ Definition rel_hold t x (_ : ~ hasY x) : @rel t x.
   + exfalso; eauto.
 Defined.
 
-Hint Constructors transitive_closure.
-
 Definition Y_or_val { ty } :
   forall (x : term ty), hasY x \/ halt x.
   intros x.
