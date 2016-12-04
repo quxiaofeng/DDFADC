@@ -790,7 +790,7 @@ Instance GRealArr A { GA : Gradient A } : Gradient (tyreal ~> A) :=
   {
     gzro := fK_ gzro;
     gplus :=
-      let n := Next _ tyreal in
+      let NR := Next _ tyreal in
       flam (flam  (flam
                      (fapp
                         (fapp (lift (lift (lift (gplus))))
@@ -810,5 +810,27 @@ Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
           (fC__ fB (fC__ fmkprod gzro)) in
       let abcbc : Term ((typrod A B ~> C) ~> (B ~> C)) :=
           (fC__ fB (fmkprod_ gzro)) in
-      _
+      let NABCL := Next Term (typrod A B ~> C) in
+      let NABCR := Next _ (typrod A B ~> C) (orig := NABCL) in
+      let NAB := Next _ (typrod A B) (orig := NABCR) in
+      flam (flam (flam
+                    (fapp (fapp
+                             (lift (lift (lift gplus)))
+                             (fapp (fapp
+                                      (fapp
+                                         (lift (lift (lift gplus)))
+                                         (fapp
+                                            (lift (lift (lift abcac)))
+                                            (lift (lift var))))
+                                      (fapp (lift (lift (lift abcac))) (lift var)))
+                                   (fzro_ var)))
+                          (fapp (fapp (fapp
+                                         (lift (lift (lift gplus)))
+                                         (fapp
+                                            (lift (lift (lift abcbc)))
+                                            (lift (lift var))))
+                                      (fapp
+                                         (lift (lift (lift abcbc)))
+                                         (lift var)))
+                                (ffst_ var)))))
   }.
