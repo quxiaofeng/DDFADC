@@ -589,3 +589,112 @@ Definition Y_or_val { ty } :
   destruct (hasY_dec x); ii.
   Apply rel_halt; ii.
 Defined.
+
+Class FTG (repr : type -> Type) :=
+  {
+    fapp { A B } : repr (A ~> B) -> repr A -> repr B;
+    ftt : repr tytop;
+    fexf { A } : repr (tybot ~> A);
+    flit : R -> repr tyreal;
+    fplus : repr (tyreal ~> tyreal ~> tyreal);
+    fminus : repr (tyreal ~> tyreal ~> tyreal);
+    fmult : repr (tyreal ~> tyreal ~> tyreal);
+    fdiv : repr (tyreal ~> tyreal ~> tyreal);
+    fleft { A B } : repr (A ~> tysum A B);
+    fright { A B } : repr (B ~> tysum A B);
+    fsummatch { A B C } : repr (tysum A B ~> (A ~> C) ~> (B ~> C) ~> C);
+    fmkprod { A B } : repr (A ~> B ~> typrod A B);
+    fzro { A B } : repr (typrod A B ~> A);
+    ffst { A B } : repr (typrod A B ~> B);
+    fS { A B C } : repr ((A ~> B ~> C) ~> (A ~> B) ~> (A ~> C));
+    fK { A B } : repr (A ~> B ~> A);
+    fI { A } : repr (A ~> A);
+    fB { A B C } : repr ((B ~> C) ~> (A ~> B) ~> (A ~> C));
+    fC { A B C } : repr ((A ~> B ~> C) ~> (B ~> A ~> C));
+    fW { A B } : repr ((A ~> A ~> B) ~> (A ~> B));
+    fY { A B } : repr (((A ~> B) ~> (A ~> B)) ~> (A ~> B))
+  }.
+
+Instance Eval : FTG term :=
+  {
+    fapp A B := tapp;
+    ftt := ttt;
+    fexf A := texf;
+    flit := tlit;
+    fplus := tplus;
+    fminus := tminus;
+    fmult := tmult;
+    fdiv := tdiv;
+    fleft A B := tleft;
+    fright A B := tright;
+    fsummatch A B C := tsummatch;
+    fmkprod A B := tmkprod;
+    fzro A B := tzro;
+    ffst A B := tfst;
+    fS A B C := tS;
+    fK A B := tK;
+    fI A := tI;
+    fB A B C := tB;
+    fC A B C := tC;
+    fW A B := tW;
+    fY A B := tY
+  }.
+
+Instance Next repr Arg { orig : FTG repr } :
+  FTG (fun x => repr x + repr (Arg ~> x))%type :=
+  {
+    fapp A B f x :=
+      match f, x with
+      | inl f', inl x' => inl (fapp f' x')
+      | inr f', inr x' => inr (fapp (fapp fS f') x')
+      | inl f', inr x' => inr (fapp (fapp fS (fapp fK f')) x')
+      | inr f', inl x' => inr (fapp (fapp fS f') (fapp fK x'))
+      end;
+    ftt := inl ftt;
+    fexf A := inl fexf;
+    flit r := inl (flit r);
+    fplus := inl fplus;
+    fminus := inl fminus;
+    fmult := inl fmult;
+    fdiv := inl fdiv;
+    fleft A B := inl fleft;
+    fright A B := inl fright;
+    fsummatch A B C := inl fsummatch;
+    fmkprod A B := inl fmkprod;
+    fzro A B := inl fzro;
+    ffst A B := inl ffst;
+    fS A B C := inl fS;
+    fK A B := inl fK;
+    fI A := inl fI;
+    fB A B C := inl fB;
+    fC A B C := inl fC;
+    fW A B := inl fW;
+    fY A B := inl fY
+  }.
+
+Definition Term A := forall { repr } { ftg : FTG repr }, repr A.
+
+Instance GetTerm : FTG Term :=
+  {
+    fapp A B f x := fun R O => fapp (f R O) (x R O);
+    ftt := fun _ _ => ftt;
+    fexf A := fun _ _ => fexf;
+    flit r := fun _ _ => flit r;
+    fplus := fun _ _ => fplus;
+    fminus := fun _ _ => fminus;
+    fmult := fun _ _ => fmult;
+    fdiv := fun _ _ => fdiv;
+    fleft A B := fun _ _ => fleft;
+    fright A B := fun _ _ => fright;
+    fsummatch A B C := fun _ _ => fsummatch;
+    fmkprod A B := fun _ _ => fmkprod;
+    fzro A B := fun _ _ => fzro;
+    ffst A B := fun _ _ => ffst;
+    fS A B C := fun _ _ => fS;
+    fK A B := fun _ _ => fK;
+    fI A := fun _ _ => fI;
+    fB A B C := fun _ _ => fB;
+    fC A B C := fun _ _ => fC;
+    fW A B := fun _ _ => fW;
+    fY A B := fun _ _ => fY
+  }.
