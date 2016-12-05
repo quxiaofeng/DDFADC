@@ -271,7 +271,7 @@ Definition halt { t } (x : term t) := exists y, eval_to x y.
 
 Hint Unfold halt.
 
-Definition rel { ty : type } : forall (t : term ty), Prop.
+(*Definition rel { ty : type } : forall (t : term ty), Prop.
   assert (track ty) by eauto.
   dependent induction ty; intro.
   + assert (track tytop) by assumption.
@@ -292,7 +292,18 @@ Definition rel { ty : type } : forall (t : term ty), Prop.
   + assert (exists l r, track (tyarr l r)) by (do 2 econstructor; eassumption).
     exact (exists t', eval_to t t' /\
                  (forall x, IHty1 (tracking _) x -> val x -> IHty2 (tracking _) (tapp t' x))).
-Defined.
+Defined.*)
+
+Fixpoint rel { ty : type } : forall (t : term ty), Prop :=
+  match ty with
+  | tytop => halt
+  | tybot => halt
+  | tyreal => halt
+  | tysum _ _ => fun x => (exists l, eval_to x (tapp tleft l) /\ rel l) \/
+                      (exists r, eval_to x (tapp tright r) /\ rel r)
+  | typrod _ _ => fun x => exists l r, eval_to x (tapp (tapp tmkprod l) r) /\ rel l /\ rel r
+  | _ ~> _ => fun f => exists f', eval_to f f' /\ (forall x, rel x -> val x -> rel (tapp f' x))
+  end.
 
 Definition rel_top t : @halt tytop t -> rel t := ltac:(ii).
 
@@ -880,4 +891,3 @@ Fixpoint toTerm { A : type } (t : term A) : Term A :=
 
 Definition drel { A : type } (t : term A) : Prop.
 Admitted.
-  
