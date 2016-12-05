@@ -271,29 +271,6 @@ Definition halt { t } (x : term t) := exists y, eval_to x y.
 
 Hint Unfold halt.
 
-(*Definition rel { ty : type } : forall (t : term ty), Prop.
-  assert (track ty) by eauto.
-  dependent induction ty; intro.
-  + assert (track tytop) by assumption.
-    exact (halt t).
-  + assert (track tybot) by assumption.
-    exact (halt t). 
-  + assert (track tyreal) by assumption.
-    exact (halt t).
-  + assert (exists l r, track (tysum l r)) by (do 2 econstructor; eassumption).
-    exact ((exists l, eval_to t (tapp tleft l) /\
-                 IHty1 (tracking _) l) \/
-           (exists r, eval_to t (tapp tright r) /\
-                 IHty2 (tracking _) r)).
-  + assert (exists l r, track (typrod l r)) by (do 2 econstructor; eassumption).
-    exact (exists l r, eval_to t (tapp (tapp tmkprod l) r) /\
-                  IHty1 (tracking _) l /\
-                  IHty2 (tracking _) r).
-  + assert (exists l r, track (tyarr l r)) by (do 2 econstructor; eassumption).
-    exact (exists t', eval_to t t' /\
-                 (forall x, IHty1 (tracking _) x -> val x -> IHty2 (tracking _) (tapp t' x))).
-Defined.*)
-
 Fixpoint rel { ty : type } : forall (t : term ty), Prop :=
   match ty with
   | tytop => halt
