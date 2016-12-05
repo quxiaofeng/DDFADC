@@ -712,7 +712,7 @@ Definition flam { repr Arg A } { orig : FTG repr } (exp : repr A + repr (Arg ~> 
   | inr exp' => exp'
   end.
 
-Definition Term A := forall { repr } { ftg : FTG repr }, repr A.
+Definition Term A := forall repr (ftg : FTG repr), repr A.
 
 Instance GetTerm : FTG Term :=
   {
@@ -834,3 +834,50 @@ Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
                                          (lift var)))
                                 (ffst_ var)))))
   }.
+
+Variable sem_eq : forall A, Term A -> Term A -> Prop.
+
+Variable diff : (R -> R) -> (R -> R).
+
+Fixpoint with_grad G A :=
+  match A with
+  | tyreal => typrod tyreal G
+  | tytop => tytop
+  | tybot => tybot
+  | tysum L R => tysum (with_grad G L) (with_grad G R)
+  | typrod L R => typrod (with_grad G L) (with_grad G R)
+  | L ~> R => (with_grad G L) ~> (with_grad G R)
+  end.
+
+Variable tdiff : forall { G A } { grad : Gradient G }, Term A -> Term (with_grad G A).
+
+Variable text : forall { G A } { grad : Gradient G }, Term (with_grad G A) -> Term A.
+
+Fixpoint toTerm { A : type } (t : term A) : Term A :=
+  match t in term A' return Term A' with
+  | tapp f x => fapp (toTerm f) (toTerm x)
+  | ttt => ftt
+  | texf => fexf
+  | tlit r => flit r
+  | tplus => fplus
+  | tminus => fminus
+  | tmult => fmult
+  | tdiv => fdiv
+  | tleft => fleft
+  | tright => fright
+  | tsummatch => fsummatch
+  | tmkprod => fmkprod
+  | tzro => fzro
+  | tfst => ffst
+  | tS => fS
+  | tK => fK
+  | tI => fI
+  | tB => fB
+  | tC => fC
+  | tW => fW
+  | tY => fY
+  end.
+
+Definition drel { A : type } (t : term A) : Prop.
+Admitted.
+  
