@@ -271,7 +271,7 @@ Definition halt { t } (x : term t) := exists y, eval_to x y.
 
 Hint Unfold halt.
 
-Fixpoint rel { ty : type } : forall (t : term ty), Prop :=
+Fixpoint rel { ty : type } : term ty -> Prop :=
   match ty with
   | tytop => halt
   | tybot => halt
@@ -823,7 +823,7 @@ Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
                                 (ffst_ var)))))
   }.
 
-Variable sem_eq : forall A, Term A -> Term A -> Prop.
+Variable sem_eq : forall A, term A -> term A -> Prop.
 
 Variable diff : (R -> R) -> (R -> R).
 
@@ -837,9 +837,11 @@ Fixpoint with_grad G A :=
   | L ~> R => (with_grad G L) ~> (with_grad G R)
   end.
 
-Variable tdiff : forall { G A } { grad : Gradient G }, Term A -> Term (with_grad G A).
+Variable tdiff : forall { G A } { grad : Gradient G }, term A -> term (with_grad G A).
 
-Variable text : forall { G A } { grad : Gradient G }, Term (with_grad G A) -> Term A.
+Variable text : forall { G A } { grad : Gradient G }, term (with_grad G A) -> term A.
+
+Variable sdiff : term (tyreal ~> tyreal) -> term (tyreal ~> tyreal).
 
 Fixpoint toTerm { A : type } (t : term A) : Term A :=
   match t in term A' return Term A' with
@@ -866,5 +868,28 @@ Fixpoint toTerm { A : type } (t : term A) : Term A :=
   | tY => fY
   end.
 
-Definition drel { A : type } (t : term A) : Prop.
-Admitted.
+Check @eq_rect type.
+Fixpoint drel { G } { T : type } { GA : Gradient G } : term T -> Prop :=
+  match T with
+  | tytop => fun _ => True
+  | tybot => fun _ => True
+  | tyreal => fun _ => True
+  | tysum _ _ => fun t => (forall t', eval_to t (tapp tleft t') -> drel t') /\
+                      (forall t', eval_to t (tapp tright t') -> drel t')
+  | typrod _ _ => fun t => forall l r, eval_to t (tapp (tapp tmkprod l) r) -> drel l /\ drel r
+  | A ~> B => fun f =>
+               (forall x, rel x -> rel (tapp f x)) /\
+               (forall (EQ : A ~> B = tyreal ~> tyreal)
+                  (gc : term (tyreal ~> G))
+                  (gd : term (G ~> tyreal)),
+                   sem_eq
+                     _
+                     (fB__
+                        (fB__
+                           (fB__ gd ffst)
+                           (tdiff
+                              (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ) :
+                                 term (typrod tyreal G ~> typrod tyreal G)))
+                        (fC__ tmkprod (tapp gc (tlit R0))))
+                     (sdiff (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ)))
+  end.
