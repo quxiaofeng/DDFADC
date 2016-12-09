@@ -133,27 +133,6 @@ Definition val_arg { A B } { f } { x } : val (@tapp A B f x) -> val x :=
 Definition vexf { A } x : val (tapp (@texf A) x) -> False :=
   ltac:(intros H; dependent destruction H).
 
-Definition vprod { A B } p :
-  val p -> { l : _ & { r | p = (tapp (tapp (@tmkprod A B) l) r)} }.
-  dependent destruction p; intros H.
-  dependent destruction p1; try (solve [exfalso; dependent destruction H]).
-  dependent destruction p1_1; try (solve [exfalso; dependent destruction H]).
-  eauto.
-Defined.
-
-Definition vsum { A B } s :
-  val s -> { l | s = tapp (@tleft A B) l } + { r | s = tapp tright r }.
-  dependent destruction s; intros H.
-  dependent destruction s1; try (solve [exfalso; dependent destruction H]);
-    eauto.
-Defined.
-
-Definition vreal x : val x -> { r | x = tlit r } :=
-  ltac:(dependent destruction x;
-          intros H;
-          solve[eauto] ||
-               exfalso; dependent destruction H).
-
 Inductive checked (X : Prop) { T : Type } (t : T) : Prop :=
 | is_checked (x : X) : checked X t.
 
@@ -169,6 +148,12 @@ Ltac uncheck_all t :=
     end.
 
 Require Import String.
+
+Definition vreal x : val x -> { r | x = tlit r } :=
+  ltac:(dependent destruction x;
+          intros H;
+          solve[eauto] ||
+               exfalso; dependent destruction H).
 
 Ltac work :=
   repeat intro;
@@ -189,6 +174,21 @@ Ltac work :=
          subst);
   uncheck_all "val_app"%string;
   cleanPS tauto.
+
+Definition vprod { A B } p :
+  val p -> { l : _ & { r | p = (tapp (tapp (@tmkprod A B) l) r) /\ val l /\ val r } }.
+  dependent destruction p; intros H.
+  dependent destruction p1; try (solve [exfalso; dependent destruction H]).
+  dependent destruction p1_1; try (solve [exfalso; dependent destruction H]).
+  work; eauto.
+Defined.
+
+Definition vsum { A B } s :
+  val s -> { l | s = tapp (@tleft A B) l /\ val l } + { r | s = tapp tright r /\ val r }.
+  dependent destruction s; intros H.
+  dependent destruction s1; try (solve [exfalso; dependent destruction H]);
+    work; eauto.
+Defined.
 
 Ltac dd1 := let x := fresh in intros x; dependent destruction x.
 
@@ -263,13 +263,13 @@ Inductive hasY : forall { x }, term x -> Prop :=
 
 Hint Constructors hasY.
 
-Definition eval_to { t } x y := transitive_closure red x y /\ @val t y.
+Definition eval_to { T } x y := (transitive_closure red x y /\ @val T y).
 
-Hint Unfold eval_to.
+Arguments eval_to { T } x y /.
 
-Definition halt { t } (x : term t) := exists y, eval_to x y.
+Definition halt { T } (x : term T) := exists y, eval_to x y.
 
-Hint Unfold halt.
+Arguments halt { T } x /.
 
 Fixpoint rel { ty : type } : term ty -> Prop :=
   match ty with
@@ -281,6 +281,8 @@ Fixpoint rel { ty : type } : term ty -> Prop :=
   | typrod _ _ => fun x => exists l r, eval_to x (tapp (tapp tmkprod l) r) /\ rel l /\ rel r
   | _ ~> _ => fun f => exists f', eval_to f f' /\ (forall x, rel x -> val x -> rel (tapp f' x))
   end.
+
+Arguments rel ty _ : simpl never.
 
 Definition rel_top t : @halt tytop t -> rel t := ltac:(ii).
 
@@ -349,7 +351,7 @@ Ltac unfold_rel :=
      try (apply rel_arr; repeat (destruct_exists || ii))).
 
 Definition rel_halt t te : @rel t te -> halt te :=
-  ltac:(destruct t; ii; unfold_rel; eauto 6).
+  ltac:(destruct t; ii; unfold_rel; simpl in *; eauto 6).
 
 Definition transitive_closure_appf { A B } f f' x :
   transitive_closure red f f' ->
@@ -373,6 +375,25 @@ Definition hasY_dec { A } x : { @hasY A x } + { ~ hasY x } :=
 
 Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
 
+Definition app_eq_func { A B } fl fr xl xr : @tapp A B fl xl = tapp fr xr -> fl = fr.
+  intros H; invcs H.
+  repeat Apply (Eqdep_dec.inj_pair2_eq_dec _ type_eq_dec); tauto.
+Defined.
+
+Definition app_eq_arg { A B } fl fr xl xr : @tapp A B fl xl = @tapp A B fr xr -> xl = xr.
+  intros H; invcs H.
+  repeat Apply (Eqdep_dec.inj_pair2_eq_dec _ type_eq_dec); tauto.
+Defined.
+
+Ltac Deduct t :=
+  match goal with
+  | H : _ |- _ => pose proof H; apply t in H
+  end.
+
+Definition app_eq { A B } fl fr xl xr : @tapp A B fl xl = tapp fr xr ->
+                                        fl = fr /\ xl = xr :=
+  ltac:(ii; Deduct (@app_eq_arg A B); Deduct (@app_eq_func A B); ii).
+
 Definition term_eq_dec
            (rdec : forall l r : R, { l = r } + { l <> r })
            A (x : term A) (y : term A)
@@ -382,8 +403,8 @@ Definition term_eq_dec
     try discharge_type_eq.
   + destruct (type_eq_dec A A0); subst.
      ++ destruct (IHx1 y1), (IHx2 y2); subst; eauto;
-          right; intros H; inversion H;
-            repeat Apply (Eqdep_dec.inj_pair2_eq_dec type type_eq_dec); tauto.
+          right; ii;
+        repeat Apply @app_eq; ii; subst; try tauto.
      ++ right; intros H; inversion H; tauto.
   + destruct (rdec r r0); [left|right]; congruence.
 Defined.
@@ -428,7 +449,8 @@ Definition rel_red_back t : forall x y, @red t x y -> rel y -> rel x :=
         dependent destruction H;
         ii;
         unfold_rel;
-        unfold eval_to in *;
+        simpl in *;
+        repeat destruct_exists;
         ii;
         eauto 8).
 
@@ -451,7 +473,8 @@ Ltac use_red_det :=
 
 Definition halt_red_preserve t x y : @red t x y -> halt x -> halt y.
   intros R H.
-  destruct H as [? [H (*bug: using [] will not work*)]]; destruct H; use_red_det; eauto.
+  destruct H as [? [H (*bug: using [] will not work*)]]; destruct H;
+    simpl in *; use_red_det; eauto; [].
   Apply red_not_val; tauto.
 Defined.
 
@@ -497,11 +520,6 @@ Definition rel_trans_back t x y :
   transitive_closure (@red t) x y -> rel y -> rel x :=
   ltac:(induction 1; ii; eauto).
 
-Ltac Deduct t :=
-  match goal with
-  | H : _ |- _ => pose proof H; apply t in H
-  end.
-
 Ltac goal_rel_step :=
   eapply rel_red_back; [solve [eauto]|].
 
@@ -545,7 +563,7 @@ Definition rel_hold t x (_ : ~ hasY x) : @rel t x.
         try goal_rel_step;
         try (econstructor; ii; [solve [eauto]|solve [eauto]|]);
         unfold_rel;
-        unfold halt, eval_to in *;
+        simpl in *;
         use_trans_red_val_eq;
         try Apply noY_split;
         ii;
@@ -731,29 +749,210 @@ Fixpoint sem_eq { A } : term A -> term A -> Prop :=
   match A with
   | tytop => fun x y => halt x <-> halt y
   | tybot => fun _ _ => True
-  | tyreal => fun x y => forall r, eval_to x (tlit r) <-> eval_to y (tlit r)
+  | tyreal => fun x y =>
+               (halt x <-> halt y) /\
+               (forall r, eval_to x (tlit r) <-> eval_to y (tlit r))
   | tysum _ _ => fun x y =>
-                  (exists xl yl, eval_to x (fleft_ xl) /\
-                            eval_to y (fleft_ yl) /\
-                            sem_eq xl yl) \/
-                  (exists xr yr,
-                      eval_to x (fright_ xr) /\
-                      eval_to y (fright_ yr) /\
-                      sem_eq xr yr) \/
-                  (~ halt x /\ ~ halt y)
+                  (halt x <-> halt y) /\
+                  (forall xl yl, eval_to x (fleft_ xl) ->
+                            eval_to y (fleft_ yl) ->
+                            sem_eq xl yl) /\
+                  (forall xr yr,
+                      eval_to x (fright_ xr) ->
+                      eval_to y (fright_ yr) ->
+                      sem_eq xr yr) /\
+                  (forall xl yr, eval_to x (fleft_ xl) ->
+                            eval_to y (fright_ yr) ->
+                            False) /\
+                  (forall xr yl,
+                      eval_to x (fright_ xr) ->
+                      eval_to y (fleft_ yl) ->
+                      False)
   | typrod _ _ => fun x y =>
-                   (exists xl xr yl yr,
-                       eval_to x (fmkprod__ xl xr) /\
-                       eval_to y (fmkprod__ yl yr) /\
-                       sem_eq xl yl /\ sem_eq xr yr) /\
-                   (~ halt x /\ ~ halt y)
+                   (halt x <-> halt y) /\
+                   (forall xl xr yl yr,
+                       eval_to x (fmkprod__ xl xr) ->
+                       eval_to y (fmkprod__ yl yr) ->
+                       sem_eq xl yl /\ sem_eq xr yr)
   | _ ~> _ => fun x y =>
-               (exists x' y', eval_to x x' /\ eval_to y y' /\
-                         forall xa ya, sem_eq xa ya -> sem_eq (tapp x' xa) (tapp y' ya)) /\
-               (~ halt x /\ ~ halt y)
+               (halt x <-> halt y) /\
+               (forall x' y', eval_to x x' -> eval_to y y' ->
+                         forall xa ya, sem_eq xa ya -> val xa -> val ya ->
+                                  sem_eq (tapp x' xa) (tapp y' ya))
   end.
 
-Definition sem_eq_refl := 1.
+Definition trans_val_det { A } (x y z : term A) :
+  transitive_closure red x y -> transitive_closure red x z ->
+  val y -> val z ->
+  y = z :=
+  ltac:(induction 1; ii; use_trans_red_val_eq; use_red_trans_val; ii; solve [eauto]).
+
+Ltac use_trans_val_det :=
+  repeat
+    match goal with
+    | A : transitive_closure red ?x ?y,
+          B : transitive_closure red ?x ?z,
+              C : val ?y, D : val ?z |- _ =>
+      pose proof (trans_val_det _ _ _ A B C D); clear B D; subst
+    end.
+
+Definition trans_val_trans { t : type } (x y z : term t) :
+  transitive_closure red x z ->
+  val z ->
+  transitive_closure red x y ->
+  transitive_closure red y z :=
+  ltac:(induction 3; ii; use_trans_red_val_eq; use_red_trans_val; eauto).
+
+Ltac use_trans_val_trans :=
+  repeat
+    match goal with
+    | A : transitive_closure red ?x ?z,
+          B : val ?z,
+              C : transitive_closure red ?x ?y |- _ =>
+      pose proof (trans_val_trans _ _ _ A B C); clear A
+    end.
+
+Ltac remove_premise L :=
+  repeat
+    match goal with
+    | H : ?P -> _ |- _ =>
+      match type of P with
+      | Prop => (assert P by L; ii)
+      end
+    end.
+
+Ltac discharge_app_eq :=
+  repeat
+    match goal with
+    | H : tapp _ _ = tapp _ _ |- _ => solve [inversion H]
+    end.
+
+Definition sem_eq_arr { A B } fl fr :
+  val fl -> val fr ->
+  (forall xl xr, sem_eq xl xr -> val xl -> val xr -> sem_eq (@tapp A B fl xl) (tapp fr xr)) ->
+  sem_eq fl fr.
+  simpl in *; ii; use_trans_red_val_eq; eauto.
+Defined.
+
+Definition sem_eq_eval_backward { A } (x y x' y' : term A) :
+  eval_to x x' -> eval_to y y' -> sem_eq x' y' -> sem_eq x y.
+  destruct A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+    use_trans_val_det; eauto.
+  specialize (H5 r); ii; remove_premise eauto;
+    eapply transitive_closure_transitive; solve [eauto].
+  specialize (H5 r); ii; remove_premise eauto;
+    use_trans_val_det; eapply transitive_closure_transitive; solve [eauto].
+  work.
+  specialize (H5 xl xr yl yr); remove_premise eauto.
+  specialize (H5 xl xr yl yr); remove_premise eauto.
+Defined.
+
+Definition sem_eq_refl { A } (x : term A) : sem_eq x x.
+  induction x; ii; work; ii;
+    repeat (apply sem_eq_arr; eauto; ii; []);
+    simpl in *; ii; work; try solve [eauto].
+  all: repeat
+         (try match goal with
+              | H : transitive_closure red _ _ |- _ =>
+               dependent destruction H; []
+              | H : red _ _ |- _=>
+                dependent destruction H;
+                solve[exfalso; Apply red_not_val; eauto] ||
+                     (try solve [exfalso; Apply red_not_val; eauto]; [])
+              | H : transitive_closure red ?x _ |- _ =>
+                assert (val x) by eauto; use_trans_red_val_eq
+              | H : tlit _ = tlit _ |- _ => invcs H
+              | H : forall r : R, (transitive_closure red (tlit ?X) (tlit r) /\ _) <-> _ |- _ =>
+                specialize (H X)
+              | H : _ + _ |- _ => destruct H
+              | H : _ = _ |- _ => solve [inversion H]
+              end;
+          try Apply @app_eq;
+          try Apply @vsum;
+          try Apply @vprod;
+          repeat destruct_exists;
+          ii;
+          remove_premise eauto;
+          subst).
+  all: eauto.
+  all: cleanPS ii.
+Admitted.
+
+Hint Resolve sem_eq_refl.
+
+Definition red_sem_eq { A } (x y : term A) : red x y -> sem_eq x y.
+  induction A; simpl; ii; repeat destruct_exists; ii;
+    use_red_trans_val; use_trans_val_trans; use_trans_red_val_eq;
+      repeat (Apply @app_eq; ii; subst); discharge_app_eq; eauto.
+
+  admit.
+Admitted.
+
+Hint Resolve red_sem_eq.
+
+Definition sem_eq_trans { A } (x y z : term A) : sem_eq x y -> sem_eq y z -> sem_eq x z.
+  induction A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+    use_trans_val_det; repeat Apply @vsum; repeat Apply @vprod;
+      repeat
+        match goal with
+        | H : _ + _ |- _ => destruct H
+        end;
+      repeat destruct_exists;
+      repeat (
+          try Apply @app_eq;
+          subst;
+          try discharge_app_eq;
+          ii);
+      eauto.
+  + eapply H3.
+    eapply H2.
+    eauto.
+  + eapply H2.
+    eapply H3.
+    eauto.
+    (*very similar to the first, but at most one can be solved with naive automation...*)
+  + eapply IHA1.
+    apply H0; ii; eauto.
+    apply H2; ii; eauto.
+  + exfalso.
+    eapply H9; ii; try eassumption; eauto.
+  + exfalso.
+    eapply H6; ii; try eassumption; eauto.
+  + eapply IHA2.
+    eapply H3; ii; eauto.
+    eapply H4; ii; eauto.
+  +  eapply H6; ii; try eassumption; eauto.
+  + eapply H5; ii; try eassumption; eauto.
+  + eapply H8; ii; try eassumption; eauto.
+  + eapply H9; ii; try eassumption; eauto.
+  + eapply IHA1.
+    eapply H2; ii; try eassumption; eauto.
+    eapply H3; ii; try eassumption; eauto.
+  + eapply IHA2.
+    eapply H2; ii; try eassumption; eauto.
+    eapply H3; ii; try eassumption; eauto.
+  + eapply IHA2.
+    eapply H2; ii; eassumption.
+    eapply H3; ii; try eassumption; eauto.
+Defined.
+
+Definition trans_red_sem_eq { A } (x y : term A) :
+  transitive_closure red x y -> sem_eq x y.
+  induction 1; eauto.
+  eapply sem_eq_trans; [|eassumption]; eauto.
+Defined.
+
+Definition sem_eq_symm { A } (x y : term A) : sem_eq x y -> sem_eq y x.
+  induction A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+    use_trans_val_det; eauto.
+  + apply H1; ii.
+  + apply H1; ii.
+  + apply IHA1.
+    eapply H1; ii; try eassumption.
+  + apply IHA2.
+    eapply H1; ii; try eassumption.
+  + eapply IHA2; eapply H1; ii; eauto.
+Defined.
 
 Class Gradient A :=
   {
@@ -865,6 +1064,11 @@ Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
   }.
 
 Variable diff : (R -> R) -> (R -> R).
+
+Definition diff_plus f g : diff (fun x => f x + g x)%R = (fun x => diff f x + diff g x)%R.
+
+Definition diff_mult f g : diff (fun x => f x * g x)%R =
+                           (fun x => diff f x * g x + diff g x * f x)%R.
 
 Fixpoint with_grad G A :=
   match A with
