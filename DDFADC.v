@@ -12,7 +12,7 @@ Inductive type :=
 
 Infix "~>" := tyarr (at level 55, right associativity).
 
-Require Export Coq.Reals.Rdefinitions.
+Require Export Reals.Rdefinitions Reals.Ranalysis.
 
 Inductive term : type -> Type :=
 | tapp { A B } (f : term (A ~> B)) (x : term A) : term B
@@ -1063,13 +1063,6 @@ Instance GProdArr A B C { GAC : Gradient (A ~> C) } { GBC : Gradient (B ~> C) }
                                 (ffst_ var)))))
   }.
 
-Variable diff : (R -> R) -> (R -> R).
-
-Definition diff_plus f g : diff (fun x => f x + g x)%R = (fun x => diff f x + diff g x)%R.
-
-Definition diff_mult f g : diff (fun x => f x * g x)%R =
-                           (fun x => diff f x * g x + diff g x * f x)%R.
-
 Fixpoint with_grad G A :=
   match A with
   | tyreal => typrod tyreal G
@@ -1084,7 +1077,44 @@ Variable tdiff : forall { G A } { grad : Gradient G }, term A -> term (with_grad
 
 Variable text : forall { G A } { grad : Gradient G }, term (with_grad G A) -> term A.
 
-Variable sdiff : term (tyreal ~> tyreal) -> term (tyreal ~> tyreal).
+Fixpoint type_denote t : Type :=
+  match t with
+  | tyreal => R
+  | tytop => unit
+  | tybot => False
+  | tysum l r => type_denote l + type_denote r
+  | typrod l r => type_denote l * type_denote r
+  | l ~> r => type_denote l -> type_denote r
+  end.
+
+Definition term_denote { A } (t : term A) : type_denote A -> Prop :=
+  match t in term A' return type_denote A' -> Prop with
+  | tapp f x => fun _ => False (*???*)
+  | ttt => fun _ => True
+  | texf => fun _ => True
+  | tlit l => eq l
+  | tplus => eq Rplus
+  | tminus => eq Rminus
+  | tmult => eq Rmult
+  | tdiv => eq Rdiv
+  | tleft => eq inl
+  | tright => eq inr
+  | tsummatch => eq (fun a b c =>
+                      match a with
+                      | inl l => b l
+                      | inr r => c r
+                      end)
+  | tmkprod => eq pair
+  | tzro => eq fst
+  | tfst => eq snd
+  | tS => eq (fun f x arg => f arg (x arg))
+  | tK => eq const
+  | tI => eq (fun x => x)
+  | tB => eq compose
+  | tC => eq flip
+  | tW => eq (fun f x => f x x)
+  | tY => (fun _ => (*???*) False)
+  end.
 
 Fixpoint toTerm { A : type } (t : term A) : Term A :=
   match t in term A' return Term A' with
@@ -1125,13 +1155,18 @@ Fixpoint drel { G } { T : type } { GA : Gradient G } : term T -> Prop :=
                   (gc : Term (tyreal ~> G))
                   (gd : Term (G ~> tyreal)),
                    gcd gc gd ->
-                   sem_eq
-                     (fB__
-                        (fB__
-                           (fB__ gd ffst _ _)
-                           (tdiff
-                              (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ) :
-                                 term (typrod tyreal G ~> typrod tyreal G)))
-                        (fC__ tmkprod (tapp (gc _ _) (tlit R0))))
-                     (sdiff (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ)))
+                   forall df,
+                     term_denote
+                       (fB__
+                          (fB__
+                             (fB__ gd ffst _ _)
+                             (tdiff
+                                (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ) :
+                                term (typrod tyreal G ~> typrod tyreal G)))
+                          (fC__ tmkprod (tapp (gc _ _) (tlit R0))))
+                       df ->
+                     forall r (x : (derivable_pt df r)), 
+                       term_denote
+                         (tapp (eq_rect (A ~> B) term f (tyreal ~> tyreal) EQ) (tlit r))
+                         (derive_pt _ r x))
   end.
