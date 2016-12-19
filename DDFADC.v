@@ -434,7 +434,7 @@ Ltac break_hasY :=
     end;
   try
     match goal with
-    | H : hasY _ |- _ => solve[dependent destruction H]
+    | H : hasY _ |- _ => solve[dependent destruction H; discharge_type_eq]
     end;
   try discharge_type_eq.
 
@@ -1087,34 +1087,22 @@ Fixpoint type_denote t : Type :=
   | l ~> r => type_denote l -> type_denote r
   end.
 
-Definition term_denote { A } (t : term A) : type_denote A -> Prop :=
-  match t in term A' return type_denote A' -> Prop with
-  | tapp f x => fun _ => False (*???*)
-  | ttt => fun _ => True
-  | texf => fun _ => True
-  | tlit l => eq l
-  | tplus => eq Rplus
-  | tminus => eq Rminus
-  | tmult => eq Rmult
-  | tdiv => eq Rdiv
-  | tleft => eq inl
-  | tright => eq inr
-  | tsummatch => eq (fun a b c =>
-                      match a with
-                      | inl l => b l
-                      | inr r => c r
-                      end)
-  | tmkprod => eq pair
-  | tzro => eq fst
-  | tfst => eq snd
-  | tS => eq (fun f x arg => f arg (x arg))
-  | tK => eq const
-  | tI => eq (fun x => x)
-  | tB => eq compose
-  | tC => eq flip
-  | tW => eq (fun f x => f x x)
-  | tY => (fun _ => (*???*) False)
+Fixpoint term_denote { A } : term A -> type_denote A -> Prop :=
+  match A with
+  | tytop => fun t _ => halt t
+  | tybot => fun _ _ => False
+  | tyreal => fun t r => eval_to t (tlit r)
+  | tysum B C => fun t s => match s with
+                        | inl dl => exists l, eval_to t (fleft_ l) /\ term_denote l dl
+                        | inr dr => exists r, eval_to t (fright_ r) /\ term_denote r dr 
+                        end
+  | typrod B C => fun t p =>
+                   exists l r, eval_to t (fmkprod__ l r) /\
+                          term_denote l (fst p) /\
+                          term_denote r (snd p)
+  | B ~> C => fun t f => forall x y, term_denote x y -> term_denote (tapp t x) (f y)  
   end.
+
 
 Fixpoint toTerm { A : type } (t : term A) : Term A :=
   match t in term A' return Term A' with
