@@ -542,16 +542,19 @@ Definition rel_lit r : rel (tlit r) := ltac:(compute; eauto).
 
 Hint Resolve rel_lit.
 
-Definition trans_red_val_eq { t x y } :
+Definition trans_val_eq { t x y } :
   transitive_closure (@red t) x y -> val x -> x = y :=
   ltac:(destruct 1; try Apply red_not_val; tauto).
 
-Ltac use_trans_red_val_eq :=
+Ltac use_trans_val_eq_with T :=
   repeat
     match goal with
-    | H : transitive_closure red ?x _, V : val ?x |- _ =>
-      pose proof (trans_red_val_eq H V); clear H; subst
+    | H : transitive_closure red ?x _ |- _ =>
+      (let V := fresh in
+      assert(V : val x) by T; pose proof (trans_val_eq H V); clear H; subst)
     end.
+
+Ltac use_trans_val_eq := use_trans_val_eq_with eauto.
 
 Definition noY_split A B f x : ~ hasY (@tapp A B f x) -> ~ hasY f /\ ~ hasY x :=
   ltac:(ii; eauto).
@@ -564,7 +567,7 @@ Definition rel_hold t x (_ : ~ hasY x) : @rel t x.
         try (econstructor; ii; [solve [eauto]|solve [eauto]|]);
         unfold_rel;
         simpl in *;
-        use_trans_red_val_eq;
+        use_trans_val_eq;
         try Apply noY_split;
         ii;
         work);
@@ -579,7 +582,7 @@ Definition rel_hold t x (_ : ~ hasY x) : @rel t x.
   + left; econstructor; ii; solve [eauto].
   + right; econstructor; ii; solve [eauto].
   + do 2 econstructor; ii; solve [eauto].
-  + specialize (H9 _ H5 H8).
+  + specialize (H9 _ H5 H7).
     pose proof (rel_halt _ _ H9); unfold halt, eval_to in *; destruct_exists; ii.
     eapply rel_trans_back.
     eapply transitive_closure_appx; eassumption.
@@ -785,23 +788,28 @@ Definition trans_val_det { A } (x y z : term A) :
   transitive_closure red x y -> transitive_closure red x z ->
   val y -> val z ->
   y = z :=
-  ltac:(induction 1; ii; use_trans_red_val_eq; use_red_trans_val; ii; solve [eauto]).
+  ltac:(induction 1; ii; use_trans_val_eq; use_red_trans_val; ii; solve [eauto]).
 
-Ltac use_trans_val_det :=
+Ltac use_trans_val_det_with T :=
   repeat
     match goal with
     | A : transitive_closure red ?x ?y,
-          B : transitive_closure red ?x ?z,
-              C : val ?y, D : val ?z |- _ =>
+          B : transitive_closure red ?x ?z |- _ =>
+      let C := fresh in
+      let D := fresh in
+      assert(C : val y) by T;
+      assert(D : val z) by T;
       pose proof (trans_val_det _ _ _ A B C D); clear B D; subst
     end.
+
+Ltac use_trans_val_det := use_trans_val_det_with eauto.
 
 Definition trans_val_trans { t : type } (x y z : term t) :
   transitive_closure red x z ->
   val z ->
   transitive_closure red x y ->
   transitive_closure red y z :=
-  ltac:(induction 3; ii; use_trans_red_val_eq; use_red_trans_val; eauto).
+  ltac:(induction 3; ii; use_trans_val_eq; use_red_trans_val; eauto).
 
 Ltac use_trans_val_trans :=
   repeat
@@ -831,26 +839,38 @@ Definition sem_eq_arr { A B } fl fr :
   val fl -> val fr ->
   (forall xl xr, sem_eq xl xr -> val xl -> val xr -> sem_eq (@tapp A B fl xl) (tapp fr xr)) ->
   sem_eq fl fr.
-  simpl in *; ii; use_trans_red_val_eq; eauto.
+  simpl in *; ii; use_trans_val_eq; eauto.
 Defined.
 
 Definition sem_eq_eval_backward { A } (x y x' y' : term A) :
   eval_to x x' -> eval_to y y' -> sem_eq x' y' -> sem_eq x y.
   destruct A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
     use_trans_val_det; eauto.
-  specialize (H5 r); ii; remove_premise eauto;
-    eapply transitive_closure_transitive; solve [eauto].
-  specialize (H5 r); ii; remove_premise eauto;
-    use_trans_val_det; eapply transitive_closure_transitive; solve [eauto].
-  work.
-  specialize (H5 xl xr yl yr); remove_premise eauto.
-  specialize (H5 xl xr yl yr); remove_premise eauto.
+  + specialize (H5 r); ii; remove_premise eauto;
+      eapply transitive_closure_transitive; solve [eauto].
+  + specialize (H5 r); ii; remove_premise eauto;
+      use_trans_val_det; eapply transitive_closure_transitive; solve [eauto].
+  + specialize (H5 xl xr yl yr); remove_premise eauto.
+  + specialize (H5 xl xr yl yr); remove_premise eauto.
+Defined.
+
+Definition sem_eq_eval { A } (x y x' y' : term A) :
+  eval_to x x' -> eval_to y y' -> sem_eq x y -> sem_eq x' y'.
+  destruct A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+    use_trans_val_det; use_trans_val_eq; eauto;
+      cleanPS tauto; repeat (work; use_trans_val_eq).
+  + specialize (H5 H3); ii; remove_premise eauto.
+    use_trans_val_det; work; eauto.
+  + specialize (H5 H4); ii; remove_premise eauto.
+    use_trans_val_det; work; eauto.
+  + specialize (H5 xl xr yl yr); tauto.
+  + specialize (H5 xl xr yl yr); tauto.
 Defined.
 
 Definition sem_eq_refl { A } (x : term A) : sem_eq x x.
   induction x; ii; work; ii;
     repeat (apply sem_eq_arr; eauto; ii; []);
-    simpl in *; ii; work; try solve [eauto].
+    simpl in *; ii; cleanPS tauto; work; try solve [eauto].
   all: repeat
          (try match goal with
               | H : transitive_closure red _ _ |- _ =>
@@ -860,7 +880,7 @@ Definition sem_eq_refl { A } (x : term A) : sem_eq x x.
                 solve[exfalso; Apply red_not_val; eauto] ||
                      (try solve [exfalso; Apply red_not_val; eauto]; [])
               | H : transitive_closure red ?x _ |- _ =>
-                assert (val x) by eauto; use_trans_red_val_eq
+                assert (val x) by eauto; use_trans_val_eq
               | H : tlit _ = tlit _ |- _ => invcs H
               | H : forall r : R, (transitive_closure red (tlit ?X) (tlit r) /\ _) <-> _ |- _ =>
                 specialize (H X)
@@ -875,7 +895,13 @@ Definition sem_eq_refl { A } (x : term A) : sem_eq x x.
           remove_premise eauto;
           subst).
   all: eauto.
-  all: cleanPS ii.
+  admit.
+  all: cleanPS tauto.
+  admit.
+  admit.
+  admit.
+  admit.
+  
 Admitted.
 
 Hint Resolve sem_eq_refl.
