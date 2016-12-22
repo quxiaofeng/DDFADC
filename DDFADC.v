@@ -1,160 +1,6 @@
-Require Export Program.
+Require Export red.
 
-Require Import CoqUtil.Tactic CoqUtil.MoreRelations.
-
-Inductive type :=
-| tytop
-| tybot
-| tyreal
-| tysum (l r : type)
-| typrod (l r : type)
-| tyarr (l r : type).
-
-Infix "~>" := tyarr (at level 55, right associativity).
-
-Require Export Reals.Rdefinitions Reals.Ranalysis.
-
-Inductive term : type -> Type :=
-| tapp { A B } (f : term (A ~> B)) (x : term A) : term B
-| ttt : term tytop
-| texf { A } : term (tybot ~> A)
-| tlit : R -> term tyreal
-| tplus : term (tyreal ~> tyreal ~> tyreal)
-| tminus : term (tyreal ~> tyreal ~> tyreal)
-| tmult : term (tyreal ~> tyreal ~> tyreal)
-| tdiv : term (tyreal ~> tyreal ~> tyreal)
-| tleft { A B } : term (A ~> (tysum A B))
-| tright { A B } : term (B ~> (tysum A B))
-| tsummatch { A B C } : term ((tysum A B) ~> (A ~> C) ~> (B ~> C) ~> C)
-| tmkprod { A B } : term (A ~> B ~> (typrod A B))
-| tzro { A B } : term ((typrod A B) ~> A)
-| tfst { A B } : term ((typrod A B) ~> B)
-| tS { A B C } : term ((A ~> B ~> C) ~> (A ~> B) ~> (A ~> C))
-| tK { A B } : term (A ~> B ~> A)
-| tI { A } : term (A ~> A)
-| tB { A B C } : term ((B ~> C) ~> (A ~> B) ~> (A ~> C))
-| tC { A B C } : term ((A ~> B ~> C) ~> (B ~> A ~> C))
-| tW { A B } : term ((A ~> A ~> B) ~> (A ~> B))
-| tY { A B } : term (((A ~> B) ~> (A ~> B)) ~> (A ~> B)).
-
-Inductive val : forall { A }, term A -> Prop :=
-| vttt : val ttt
-| vtexf A : val (@texf A)
-| vtlit r : val (tlit r)
-| vtplus : val tplus
-| vtplus' x : val x -> val (tapp tplus x)
-| vtminus : val tminus
-| vtminus' x : val x -> val (tapp tminus x)
-| vtmult : val tmult
-| vtmult' x : val x -> val (tapp tmult x)
-| vtdiv : val tdiv
-| vtdiv' x : val x -> val (tapp tdiv x)
-| vtleft A B : val (@tleft A B)
-| vtleft' A B a : val a -> val (tapp (@tleft A B) a)
-| vtright A B : val (@tright A B)
-| vtright' A B b : val b -> val (tapp (@tright A B) b)
-| vtsummatch A B C : val (@tsummatch A B C)
-| vtsummatch' A B C s : val s -> val (tapp (@tsummatch A B C) s)
-| vtsummatch'' A B C s f : val s -> val f -> val (tapp (tapp (@tsummatch A B C) s) f)
-| vtmkprod A B : val (@tmkprod A B)
-| vtmkprod' A B a : val a -> val (tapp (@tmkprod A B) a)
-| vtmkprod'' A B a b : val a -> val b -> val (tapp (tapp (@tmkprod A B) a) b)
-| vtzro A B : val (@tzro A B)
-| vtfst A B : val (@tfst A B)
-| vtS A B C : val (@tS A B C)
-| vtS' A B C f : val f -> val (tapp (@tS A B C) f)
-| vtS'' A B C f x : val f -> val x -> val (tapp (tapp (@tS A B C) f) x)
-| vtK A B : val (@tK A B)
-| vtK' A B a : val a -> val (tapp (@tK A B) a)
-| vtI A : val (@tI A)
-| vtB A B C : val (@tB A B C)
-| vtB' A B C f : val f -> val (tapp (@tB A B C) f)
-| vtB'' A B C f g : val f -> val g -> val (tapp (tapp (@tB A B C) f) g)
-| vtC A B C : val (@tC A B C)
-| vtC' A B C f : val f -> val (tapp (@tC A B C) f)
-| vtC'' A B C f x : val f -> val x -> val (tapp (tapp (@tC A B C) f) x)
-| vtW A B : val (@tW A B)
-| vtW' A B f : val f -> val (tapp (@tW A B) f)
-| vtY A B : val (@tY A B)
-| vtY' A B f : val f -> val (tapp (@tY A B) f).
-
-Hint Constructors val.
-
-Inductive red : forall { A }, term A -> term A -> Prop :=
-| rtplus l r : red (tapp (tapp tplus (tlit l)) (tlit r)) (tlit (Rplus l r))
-| rtminus l r : red (tapp (tapp tminus (tlit l)) (tlit r)) (tlit (Rminus l r))
-| rtmult l r : red (tapp (tapp tmult (tlit l)) (tlit r)) (tlit (Rmult l r))
-| rtdiv l r : red (tapp (tapp tdiv (tlit l)) (tlit r)) (tlit (Rdiv l r))
-| rtleft { A B C } a f g :
-    val a -> val f -> val g ->
-    red (tapp (tapp (tapp (@tsummatch A B C) (tapp tleft a)) f) g) (tapp f a)
-| rtright { A B C } b f g :
-    val b -> val f -> val g ->
-    red (tapp (tapp (tapp (@tsummatch A B C) (tapp tright b)) f) g) (tapp g b)
-| rtzro { A B } a b :
-    val a -> val b ->
-    red (tapp tzro (tapp (tapp (@tmkprod A B) a) b)) a
-| rtfst { A B } a b :
-    val a -> val b ->
-    red (tapp tfst (tapp (tapp (@tmkprod A B) a) b)) b
-| rtS { A B C } f x arg :
-    val f -> val x -> val arg ->
-    red (tapp (tapp (tapp (@tS A B C) f) x) arg) (tapp (tapp f arg) (tapp x arg))
-| rtK { A B } x y :
-    val x -> val y ->
-    red (tapp (tapp (@tK A B) x) y) x
-| rtI { A } x :
-    val x ->
-    red (tapp (@tI A) x) x
-| rtB { A B C } f g x :
-    val f -> val g -> val x ->
-    red (tapp (tapp (tapp (@tB A B C) f) g) x) (tapp f (tapp g x))
-| rtC { A B C } f x y :
-    val f -> val x -> val y ->
-    red (tapp (tapp (tapp (@tC A B C) f) x) y) (tapp (tapp f y) x)
-| rtW { A B } f x :
-    val f -> val x ->
-    red (tapp (tapp (@tW A B) f) x) (tapp (tapp f x) x)
-| rtY { A B } f x :
-    val f -> val x ->
-    red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x)
-| rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
-| rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x').
-
-Hint Constructors red.
-Hint Resolve rtappx.
-
-Definition val_func { A B } { f } { x } : val (@tapp A B f x) -> val f :=
-  ltac:(intros H; dependent induction H; constructor; tauto).
-
-Definition val_arg { A B } { f } { x } : val (@tapp A B f x) -> val x :=
-  ltac:(intros H; dependent induction H; tauto).
-
-Definition vexf { A } x : val (tapp (@texf A) x) -> False :=
-  ltac:(intros H; dependent destruction H).
-
-Inductive checked (X : Prop) { T : Type } (t : T) : Prop :=
-| is_checked (x : X) : checked X t.
-
-Ltac check H t :=
-  pose proof (is_checked _ t H); clear H.
-
-Ltac uncheck H := inversion H; clear H.
-
-Ltac uncheck_all t :=
-  repeat
-    match goal with
-    | H : checked _ t |- _ => uncheck H
-    end.
-
-Require Import String.
-
-Definition vreal x : val x -> { r | x = tlit r } :=
-  ltac:(dependent destruction x;
-          intros H;
-          solve[eauto] ||
-               exfalso; dependent destruction H).
-
+Inductive val_app_type := val_app.
 Ltac work :=
   repeat intro;
   repeat
@@ -165,14 +11,14 @@ Ltac work :=
      try solve [(exfalso; dependent destruction H)];
       pose proof (val_func H);
       pose proof (val_arg H);
-      check H "val_app"%string
+      check H val_app
     | H : tlit _ = tlit _ |- _ =>
       invcs H
     | H : _ + _ |- _ => destruct H
      end ||
          destruct_exists ||
          subst);
-  uncheck_all "val_app"%string;
+  uncheck_all val_app;
   cleanPS tauto.
 
 Definition vprod { A B } p :
@@ -207,8 +53,7 @@ Require Import Omega.
 Ltac discharge_type_eq :=
   repeat (Apply (f_equal type_size)); simpl in *; omega.
 
-Inductive track { T } (t : T) : Prop :=
-| tracking.
+Inductive track { T } (t : T) : Prop := tracking.
 
 Hint Constructors track.
 
@@ -821,13 +666,14 @@ Ltac use_trans_val_trans :=
     end.
 
 Ltac remove_premise L :=
-  repeat
+  (repeat
     match goal with
     | H : ?P -> _ |- _ =>
       match type of P with
       | Prop => (assert P by L; ii)
       end
-    end.
+    end);
+  cleanPS tauto.
 
 Ltac discharge_app_eq :=
   repeat
@@ -982,6 +828,124 @@ Definition sem_eq_trans { A } (x y x' y' : term A) :
   + eapply H3; ii; try eapply transitive_closure_transitive; eauto.
 Defined.
 
+Fixpoint type_denote t : Type :=
+  match t with
+  | tyreal => R
+  | tytop => unit
+  | tybot => False
+  | tysum l r => type_denote l + type_denote r
+  | typrod l r => type_denote l * type_denote r
+  | l ~> r => type_denote l -> type_denote r
+  end.
+
+Fixpoint term_denote { A } : term A -> type_denote A -> Prop :=
+  match A with
+  | tytop => fun t _ => halt t
+  | tybot => fun _ _ => False
+  | tyreal => fun t r => eval_to t (tlit r)
+  | tysum B C => fun t s => match s with
+                        | inl dl => exists l, eval_to t (fleft_ l) /\ term_denote l dl
+                        | inr dr => exists r, eval_to t (fright_ r) /\ term_denote r dr 
+                        end
+  | typrod B C => fun t p =>
+                   exists l r, eval_to t (fmkprod__ l r) /\
+                          term_denote l (fst p) /\
+                          term_denote r (snd p)
+  | B ~> C => fun t f => exists t', eval_to t t' /\
+                           forall x y, term_denote x y -> term_denote (tapp t' x) (f y)  
+  end.
+
+Definition term_denote_halt { A } (t : term A) x : term_denote t x -> halt t.
+  induction A; simpl in *; ii; try match_destruct; destruct_exists; ii; eauto.
+Defined.
+
+Definition term_denote_red { A } (l r : term A) x :
+  red l r -> term_denote l x -> term_denote r x.
+  destruct A; ii; simpl in *;
+    repeat (
+        destruct_exists; ii;
+        use_red_trans_val;
+        try match_destruct); eauto 6.
+Defined.
+
+Definition term_denote_trans { A } (l r : term A) x :
+  transitive_closure red l r -> term_denote l x -> term_denote r x :=
+  ltac:(induction 1; eauto using term_denote_red).
+
+Definition term_denote_red_back { A } (l r : term A) x :
+  red l r -> term_denote r x -> term_denote l x.
+  destruct A; ii; simpl in *;
+    repeat (destruct_exists; ii;
+            try match_destruct); eauto 7.
+Defined.
+
+Hint Resolve term_denote_red_back.
+
+Definition term_denote_trans_back { A } (l r : term A) x :
+  transitive_closure red l r -> term_denote r x -> term_denote l x :=
+  ltac:(induction 1; eauto).
+
+Definition sem_eq_denote_rel { A } (l r : term A) :
+  (forall x, sem_eq l r -> term_denote l x -> term_denote r x) /\
+  (forall x, term_denote l x -> term_denote r x -> sem_eq l r).
+  induction A; simpl in *; ii;
+    repeat (
+        try match_destruct;
+        remove_premise eauto;
+        destruct_exists; ii;
+        use_trans_val_det;
+        try Apply @vsum;
+        try Apply @vprod;
+        try Apply @app_eq;
+        try match goal with
+            | H : _ = _ |- _ => solve [inversion H]
+            | H : tlit _ = tlit _ |- _ => invcs H                                      
+            end;
+        subst);
+    eauto.
+  + eapply H2; eauto.
+  + econstructor; ii; try eassumption; eauto; [].
+    eapply IHA1; try eapply H; ii; try eassumption; eauto.
+  + exfalso; eapply H3; ii; try eassumption; eauto.
+  + exfalso; eapply H5; ii; try eassumption; eauto.
+  + econstructor; ii; try eassumption; eauto; [].
+    eapply IHA2; try eapply H2; try eassumption; eauto.
+  + eapply IHA1; eauto.
+  + eapply IHA2; eauto.
+  + destruct x; simpl in *; do 2 econstructor; ii; try eassumption; eauto.
+    eapply IHA1; try eassumption; eapply H2; ii; try eassumption; eauto.
+    eapply IHA2; try eassumption; eapply H2; ii; try eassumption; eauto.
+  + eapply IHA1; eassumption.
+  + eapply IHA2; eassumption.
+  + econstructor; ii; try eassumption; [].
+    specialize (H5 x0 y); ii.
+    eapply IHA2; try eassumption; [].
+    Deduct (term_denote_halt x0); simpl in *; destruct_exists; ii; [].
+    eapply sem_eq_trans_back; try eapply transitive_closure_appx; try eassumption.
+    eapply H2; ii.
+    eapply IHA1; try eassumption;
+      eapply term_denote_trans; eassumption.
+  + admit.
+Admitted.
+
+Definition denote_sem_eq { A } (l r : term A) :
+  forall x, term_denote l x -> term_denote r x -> sem_eq l r.
+  induction A; simpl in *; ii;
+    repeat (try match goal with
+                | H : tlit _ = tlit _ |- _ => invcs H
+                | H : _ = _ |- _ => solve [inversion H]
+                end;
+            try match_destruct;
+            destruct_exists; ii;
+            use_trans_val_det;
+            try Apply @app_eq;
+            subst);
+    eauto.
+  eapply sem_eq_trans; try eapply transitive_closure_appf; try eassumption; [].
+  
+  admit.
+Admitted.
+
 Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
   induction x; ii;
     repeat (apply sem_eq_arr; eauto; ii; []);
@@ -1025,23 +989,54 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
     specialize (H17 xl1 xr1); remove_premise eauto.
     destruct (classic (halt (tapp H15 xl1))).
     ++ simpl in *; remove_premise eauto; cleanPS tauto; destruct_exists; ii.
-       specialize (H20 H17 H22); ii.
-       specialize (H11 xl1 xr1); ii.
+       specialize (H19 H13 H17); specialize (H11 xl1 xr1); ii.
        destruct (classic (halt (tapp H14 xl1))).
        +++ Deduct @sem_eq_halt; eauto; []; simpl in *; destruct_exists; ii.
-           specialize (H20 H11 H13).
-           assert (sem_eq H11 H13) by (eapply sem_eq_eval; simpl in *; ii; eassumption).
+           specialize (H19 H11 H18).
+           assert (sem_eq H11 H18) by (eapply sem_eq_eval; simpl in *; ii; eassumption).
            remove_premise eauto.
-           admit.
+           eapply sem_eq_trans_back;
+             try eapply transitive_closure_appf;
+             try eassumption; [].
+           eapply sem_eq_trans_back;
+             try eapply transitive_closure_appx;
+             eassumption.
        +++ admit.
     ++ admit.
-  + admit.
-  + admit.
-  + admit.
-  + admit.
+  + specialize (H10 H15 H9); specialize (H11 H14 H0); remove_premise eauto.
+    specialize (H11 xl1 xr1); ii.
+    destruct (classic (halt (tapp H14 xl1))).
+    ++ Deduct @sem_eq_halt; eauto; []; simpl in *; destruct_exists; ii.
+       specialize (H17 H11 H13).
+       assert (sem_eq H11 H13) by (eapply sem_eq_eval; simpl in *; ii; eassumption).
+       remove_premise eauto.
+       eapply sem_eq_trans_back; try eapply transitive_closure_appx; eassumption.
+    ++ admit.
+  + specialize (H10 H12 H9); remove_premise eauto.
+    specialize (H10 xl1 xr1); ii.
+    destruct (classic (halt (tapp H12 xl1))).
+    ++ pose proof (sem_eq_halt (tapp H12 xl1) (tapp H9 xr1));
+         simpl in *; remove_premise eauto;
+           destruct_exists; ii;
+             use_trans_val_det; cleanPS tauto.
+       specialize (H14 H10 H17); ii.
+       specialize (H14 xl0 xr0); ii.
+       eapply sem_eq_trans_back; try eapply transitive_closure_appf; eassumption.
+    ++ admit.
+  + specialize (H7 H9 H6); remove_premise eauto.
+    specialize (H7 xl0 xr0); ii.
+    destruct (classic (halt (tapp H9 xl0))).
+    ++ pose proof (sem_eq_halt (tapp H9 xl0) (tapp H6 xr0)); simpl in *; remove_premise eauto;
+         destruct_exists; ii.
+       specialize (H11 H7 H14); remove_premise eauto.
+       specialize (H11 xl0 xr0); ii.
+       eapply sem_eq_trans_back; try eapply transitive_closure_appf; eassumption.
+    ++ admit.
+  + pose proof (H7 H9 H6); remove_premise eauto.
+    admit. (*cannot prove*)
 Admitted.
 
-(*Hint Resolve sem_eq_refl.*)
+Hint Resolve sem_eq_refl.
 
 Definition red_sem_eq { A } (x y : term A) : red x y -> sem_eq x y.
   induction A; simpl; ii; repeat destruct_exists; ii;
@@ -1049,9 +1044,9 @@ Definition red_sem_eq { A } (x y : term A) : red x y -> sem_eq x y.
       repeat (Apply @app_eq; ii; subst); discharge_app_eq; eauto.
 Admitted.
 
-(*Hint Resolve red_sem_eq.*)
+Hint Resolve red_sem_eq.
 
-Definition sem_eq_trans { A } (x y z : term A) : sem_eq x y -> sem_eq y z -> sem_eq x z.
+Definition sem_eq_transitive { A } (x y z : term A) : sem_eq x y -> sem_eq y z -> sem_eq x z.
   induction A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
     use_trans_val_det; cleanPS tauto; repeat Apply @vsum; repeat Apply @vprod;
       repeat
@@ -1100,8 +1095,7 @@ Defined.
 Definition trans_sem_eq { A } (x y : term A) :
   transitive_closure red x y -> sem_eq x y.
   induction 1; eauto.
-  eapply sem_eq_trans; [|eassumption]; eauto.
-Defined.
+Admitted.
 
 Class Gradient A :=
   {
@@ -1225,33 +1219,6 @@ Fixpoint with_grad G A :=
 Variable tdiff : forall { G A } { grad : Gradient G }, term A -> term (with_grad G A).
 
 Variable text : forall { G A } { grad : Gradient G }, term (with_grad G A) -> term A.
-
-Fixpoint type_denote t : Type :=
-  match t with
-  | tyreal => R
-  | tytop => unit
-  | tybot => False
-  | tysum l r => type_denote l + type_denote r
-  | typrod l r => type_denote l * type_denote r
-  | l ~> r => type_denote l -> type_denote r
-  end.
-
-Fixpoint term_denote { A } : term A -> type_denote A -> Prop :=
-  match A with
-  | tytop => fun t _ => halt t
-  | tybot => fun _ _ => False
-  | tyreal => fun t r => eval_to t (tlit r)
-  | tysum B C => fun t s => match s with
-                        | inl dl => exists l, eval_to t (fleft_ l) /\ term_denote l dl
-                        | inr dr => exists r, eval_to t (fright_ r) /\ term_denote r dr 
-                        end
-  | typrod B C => fun t p =>
-                   exists l r, eval_to t (fmkprod__ l r) /\
-                          term_denote l (fst p) /\
-                          term_denote r (snd p)
-  | B ~> C => fun t f => forall x y, term_denote x y -> term_denote (tapp t x) (f y)  
-  end.
-
 
 Fixpoint toTerm { A : type } (t : term A) : Term A :=
   match t in term A' return Term A' with
