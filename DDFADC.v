@@ -53,10 +53,6 @@ Require Import Omega.
 Ltac discharge_type_eq :=
   repeat (Apply (f_equal type_size)); simpl in *; omega.
 
-Inductive track { T } (t : T) : Prop := tracking.
-
-Hint Constructors track.
-
 Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
   induction tm; eauto; [].
   destruct IHtm1, IHtm2; try (right; intuition idtac; work; solve [eauto]); eauto; [].
