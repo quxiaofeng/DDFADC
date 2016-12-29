@@ -35,7 +35,7 @@ Inductive term : type -> Type :=
 | tB { A B C } : term ((B ~> C) ~> (A ~> B) ~> (A ~> C))
 | tC { A B C } : term ((A ~> B ~> C) ~> (B ~> A ~> C))
 | tW { A B } : term ((A ~> A ~> B) ~> (A ~> B))
-| tY { A B } : term (((A ~> B) ~> (A ~> B)) ~> (A ~> B)).
+| tZ { A B } : term (((A ~> B) ~> (A ~> B)) ~> (A ~> B)).
 
 Inductive val : forall { A }, term A -> Prop :=
 | vttt : val ttt
@@ -75,8 +75,8 @@ Inductive val : forall { A }, term A -> Prop :=
 | vtC'' A B C f x : val f -> val x -> val (tapp (tapp (@tC A B C) f) x)
 | vtW A B : val (@tW A B)
 | vtW' A B f : val f -> val (tapp (@tW A B) f)
-| vtY A B : val (@tY A B)
-| vtY' A B f : val f -> val (tapp (@tY A B) f).
+| vtZ A B : val (@tZ A B)
+| vtZ' A B f : val f -> val (tapp (@tZ A B) f).
 
 Hint Constructors val.
 
@@ -115,9 +115,9 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
 | rtW { A B } f x :
     val f -> val x ->
     red (tapp (tapp (@tW A B) f) x) (tapp (tapp f x) x)
-| rtY { A B } f x :
+| rtZ { A B } f x :
     val f -> val x ->
-    red (tapp (tapp (@tY A B) f) x) (tapp (tapp f (tapp tY f)) x)
+    red (tapp (tapp (@tZ A B) f) x) (tapp (tapp f (tapp tZ f)) x)
 | rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
 | rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x').
 

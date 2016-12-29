@@ -1,4 +1,5 @@
-red.v
+Red.v
+Rel.v
 DDFADC.v
 -R . DDFADC
 -o Makefile

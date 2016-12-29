@@ -101,7 +101,8 @@ endif
 #                    #
 ######################
 
-VFILES:=red.v\
+VFILES:=Red.v\
+  Rel.v\
   DDFADC.v
 
 ifneq ($(filter-out archclean clean cleanall printenv,$(MAKECMDGOALS)),)
