@@ -396,6 +396,48 @@ Fixpoint type_denote_par_only_val (t : type) : Type :=
 
 Definition type_denote_par t := with_bot (type_denote_par_only_val t).
 
+Fixpoint term_denote_par_sem_eq { A } : term A -> type_denote_par A -> Prop :=
+  match A with
+  | tytop => fun t d =>
+              match d with
+              | Some tt => halt t
+              | None => ~ halt t
+              end
+  | tybot => fun t d =>
+              match d with
+              | Some f => False_rect Prop f
+              | None => True
+              end
+  | tyreal => fun t d =>
+               match d with
+               | Some r => eval_to t (tlit r)
+               | None => ~ halt t
+               end
+  | tysum _ _ => fun t d =>
+                  match d with
+                  | Some (inl dl) =>
+                    exists tl, eval_to t (tapp tleft tl) /\ term_denote_par_sem_eq tl (Some dl)
+                  | Some (inr dr) =>
+                    exists tr, eval_to t (tapp tright tr) /\ term_denote_par_sem_eq tr (Some dr)
+                  | None => ~ halt t
+                  end
+  | typrod _ _ => fun t d =>
+                   match d with
+                   | Some (dl, dr) =>
+                     exists tl tr, eval_to t (tapp (tapp tmkprod tl) tr) /\
+                              term_denote_par_sem_eq tl (Some dl) /\
+                              term_denote_par_sem_eq tr (Some dr)
+                   | None => ~ halt t
+                   end
+  | _ ~> _ => fun t d =>
+               match d with
+               | Some df =>
+                 exists tf, eval_to t tf /\
+                       forall tx dx, term_denote_par_sem_eq tx (Some dx) ->
+                                term_denote_par_sem_eq (tapp tf tx) (df dx)
+               | None => ~ halt t
+               end
+  end. (*refactor the trivial None case*)
 Program Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop :=
   let auto_resolve := LEq in
   match t with
