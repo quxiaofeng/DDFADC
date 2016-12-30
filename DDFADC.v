@@ -402,7 +402,7 @@ Fixpoint type_denote_par_only_val (t : type) : Type :=
 
 Definition type_denote_par t := with_bot (type_denote_par_only_val t).
 
-Fixpoint term_denote_par_sem_eq { A } : term A -> type_denote_par A -> Prop :=
+Fixpoint term_denote_par_os { A } : term A -> type_denote_par A -> Prop :=
   match A with
   | tytop => fun t d =>
               match d with
@@ -422,28 +422,41 @@ Fixpoint term_denote_par_sem_eq { A } : term A -> type_denote_par A -> Prop :=
   | tysum _ _ => fun t d =>
                   match d with
                   | Some (inl dl) =>
-                    exists tl, eval_to t (tapp tleft tl) /\ term_denote_par_sem_eq tl (Some dl)
+                    exists tl, eval_to t (tapp tleft tl) /\ term_denote_par_os tl (Some dl)
                   | Some (inr dr) =>
-                    exists tr, eval_to t (tapp tright tr) /\ term_denote_par_sem_eq tr (Some dr)
+                    exists tr, eval_to t (tapp tright tr) /\ term_denote_par_os tr (Some dr)
                   | None => ~ halt t
                   end
   | typrod _ _ => fun t d =>
                    match d with
                    | Some (dl, dr) =>
                      exists tl tr, eval_to t (tapp (tapp tmkprod tl) tr) /\
-                              term_denote_par_sem_eq tl (Some dl) /\
-                              term_denote_par_sem_eq tr (Some dr)
+                              term_denote_par_os tl (Some dl) /\
+                              term_denote_par_os tr (Some dr)
                    | None => ~ halt t
                    end
   | _ ~> _ => fun t d =>
                match d with
                | Some df =>
                  exists tf, eval_to t tf /\
-                       forall tx dx, term_denote_par_sem_eq tx (Some dx) ->
-                                term_denote_par_sem_eq (tapp tf tx) (df dx)
+                       forall tx dx,
+                         term_denote_par_os tx (Some dx) ->
+                         term_denote_par_os (tapp tf tx) (df dx)
                | None => ~ halt t
                end
   end. (*refactor the trivial None case*)
+
+Definition term_denote_par_os_halt { A } (t : term A) d :
+  term_denote_par_os t (Some d) -> halt t.
+  destruct A; simpl in *; repeat (destruct_exists; repeat match_destruct; ii); eauto.
+Defined.
+
+Definition term_denote_par_os_not_halt { A } (t : term A) :
+  term_denote_par_os t None -> ~ halt t.
+  destruct A; simpl in *; repeat (destruct_exists; repeat match_destruct; ii);
+    unfold eval_to in *; ii; work; eauto.
+Defined.
+
 Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop :=
   let auto_resolve := LEq in
   match t with
@@ -506,7 +519,7 @@ Definition term_denote_par_exists { A } (t : term A) : exists d, term_denote_par
        | Some f, Some x => f x
        | _, _ => None
        end); exists IHt1; exists IHt2; ii; repeat match_destruct; ii.
-  + admit. (*it is wrong definition rn*)
+  + admit. (*it is wrong definition anyway, dont bother proofing it*)
 Admitted.
 
 Definition term_denote_par_sem_eq_exists { A } (t : term A) : exists d, term_denote_par_sem_eq t d.
@@ -597,6 +610,9 @@ Goal forall A t d, @term_denote_par A t d -> @term_denote_par_sem_eq A t d.
     try (unfold eval_to in *; ii; eauto; [];
          eapply transitive_closure_transitive;
          try eapply transitive_closure_appx; try eassumption; solve [eauto]).
+
+  econstructor; ii.
+  eapply eval_to_x.
 Admitted.
 
 Goal forall A t d, @term_denote_par_sem_eq A t d -> @term_denote_par A t d.
