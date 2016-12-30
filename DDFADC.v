@@ -239,12 +239,13 @@ Definition sem_eq_arr { A B } fl fr :
   val fl -> val fr ->
   (forall xl xr, sem_eq xl xr -> val xl -> val xr -> sem_eq (@tapp A B fl xl) (tapp fr xr)) ->
   sem_eq fl fr.
-  simpl in *; ii; use_trans_val_eq; eauto.
+  simpl in *; unfold eval_to; ii; use_trans_val_eq; eauto.
 Defined.
 
 Definition sem_eq_eval_back { A } (x y x' y' : term A) :
   eval_to x x' -> eval_to y y' -> sem_eq x' y' -> sem_eq x y.
-  destruct A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+  destruct A; simpl in *; unfold eval_to;
+    ii; remove_premise eauto; repeat destruct_exists; ii;
     use_trans_val_det; eauto.
   + specialize (H5 r); ii; remove_premise eauto;
       eapply transitive_closure_transitive; solve [eauto].
@@ -259,6 +260,7 @@ Definition sem_eq_red_back { A } (x y x' y' : term A) :
   destruct A; simpl in *;
     repeat (
         destruct_exists;
+        unfold eval_to in *;
         ii;
         use_red_trans_val;
         use_trans_val_det;
@@ -272,9 +274,10 @@ Defined.
 
 Definition sem_eq_eval { A } (x y x' y' : term A) :
   eval_to x x' -> eval_to y y' -> sem_eq x y -> sem_eq x' y'.
-  destruct A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
-    use_trans_val_det; use_trans_val_eq; eauto;
-      cleanPS tauto; repeat (work; use_trans_val_eq).
+  destruct A; simpl in *; unfold eval_to;
+    ii; remove_premise eauto; repeat destruct_exists; ii;
+      use_trans_val_det; use_trans_val_eq; eauto;
+        cleanPS tauto; repeat (work; use_trans_val_eq).
   + specialize (H5 H3); ii; remove_premise eauto.
     use_trans_val_det; work; eauto.
   + specialize (H5 H4); ii; remove_premise eauto.
@@ -288,6 +291,7 @@ Definition sem_eq_red { A } (x y x' y' : term A) :
   destruct A; simpl in *; ii;
     repeat (
         destruct_exists;
+        unfold eval_to in *;
         ii;
         use_trans_val_det;
         use_red_trans_val;
@@ -302,10 +306,10 @@ Defined.
 Require Export Classical.
 
 Definition sem_eq_halt { A } (x y : term A) : sem_eq x y -> halt x -> halt y :=
-  ltac:(induction A; simpl in *; ii; destruct_exists; ii; eauto; work).
+  ltac:(induction A; simpl in *; unfold eval_to; ii; destruct_exists; ii; eauto; work).
 
 Definition sem_eq_symm { A } (x y : term A) : sem_eq x y -> sem_eq y x.
-  induction A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
+  induction A; simpl; unfold eval_to; ii; remove_premise eauto; repeat destruct_exists; ii;
     use_trans_val_det; eauto.
   + apply H1; ii.
   + apply H1; ii.
@@ -321,6 +325,7 @@ Definition sem_eq_trans_back { A } (x y x' y' : term A) :
   destruct A; simpl in *;
     repeat (
         destruct_exists;
+        unfold eval_to in *;
         ii;
         use_trans_val_trans;
         use_trans_val_eq;
@@ -339,6 +344,7 @@ Definition sem_eq_trans { A } (x y x' y' : term A) :
   destruct A; simpl in *;
     repeat (
         destruct_exists; ii;
+        unfold eval_to in *;
         remove_premise
           ltac:(econstructor; ii; [eapply transitive_closure_transitive|]; eassumption);
         use_trans_val_det;
@@ -438,7 +444,7 @@ Fixpoint term_denote_par_sem_eq { A } : term A -> type_denote_par A -> Prop :=
                | None => ~ halt t
                end
   end. (*refactor the trivial None case*)
-Program Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop :=
+Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop :=
   let auto_resolve := LEq in
   match t with
   | tapp f x => (fun td => exists f' x',
@@ -485,14 +491,171 @@ Program Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop 
                                      end)))
   | tZ => (fun td =>
             match td with
-            | Some Y => forall f,
-                match Y f with
-                | Some YF => False (*???*)
+            | Some Z => forall f,
+                match Z f with
+                | Some ZF => False (*???*)
                 | None => False
                 end
             | None => False
             end)
   end.
+
+Definition term_denote_par_exists { A } (t : term A) : exists d, term_denote_par t d.
+  induction t; simpl in *; destruct_exists; eauto.
+  + exists (match IHt1, IHt2 with
+       | Some f, Some x => f x
+       | _, _ => None
+       end); exists IHt1; exists IHt2; ii; repeat match_destruct; ii.
+  + admit. (*it is wrong definition rn*)
+Admitted.
+
+Definition term_denote_par_sem_eq_exists { A } (t : term A) : exists d, term_denote_par_sem_eq t d.
+  induction t; simpl in *;
+    repeat (destruct_exists;
+            repeat match_destruct;
+            ii);
+    eauto.
+Admitted.
+
+Ltac to_false L :=
+  match goal with
+  | |- ?G => let H := fresh in try (assert (H : ~ G) by L; clear H; exfalso)
+  end.
+
+Require Export FunctionalExtensionality.
+
+Goal forall A t dl dr, @term_denote_par A t dl -> @term_denote_par A t dr -> dl = dr.
+  induction t; repeat (simpl in *; ii; destruct_exists; repeat match_destruct; subst);
+    repeat
+      match goal with
+      | H : term_denote_par ?t ?x, H1 : term_denote_par ?t ?y |- _ =>
+        (specialize (IHt1 _ _ H H1); invcs IHt1) ||
+                                                 (specialize (IHt2 _ _ H H1); invcs IHt2)
+      end; ii.
+  admit (*case Z*).
+Admitted.
+
+Goal forall A t dl dr, @term_denote_par_sem_eq A t dl -> @term_denote_par_sem_eq A t dr -> dl = dr.
+  induction A;
+    repeat (
+        simpl in *;
+        ii;
+        repeat match_destruct;
+        use_trans_val_det;
+        unfold eval_to in *;
+        repeat
+          match goal with
+          | H : tlit _ = tlit _ |- _ => invcs H
+          | H : _ = _ |- _ => solve [inversion H]
+          end;
+        to_false discriminate;
+        destruct_exists;
+        repeat Apply @app_eq;
+        subst);
+    eauto.
+  specialize (IHA1 H0 (Some t1) (Some t0)); ii; invcs H8; ii.
+  specialize (IHA2 H0 (Some t1) (Some t0)); ii; invcs H8; ii.
+  specialize (IHA1 H0 (Some t2) (Some t0)); specialize (IHA2 H1 (Some t3) (Some t1)); ii;
+    invcs H12; invcs H; ii.
+  admit.
+Admitted.
+
+Definition eval_to_f { A B } (f g : term (A ~> B)) x :
+  val (tapp g x) -> eval_to f g -> eval_to (tapp f x) (tapp g x).
+  unfold eval_to; ii; work.
+  eapply transitive_closure_transitive; try eapply transitive_closure_appf; eauto.
+Defined.
+
+Hint Resolve eval_to_f.
+
+Definition eval_to_x { A B } (f : term (A ~> B)) x y :
+  val (tapp f y) -> eval_to x y -> eval_to (tapp f x) (tapp f y).
+  unfold eval_to; ii; work.
+  eapply transitive_closure_transitive; try eapply transitive_closure_appx; eauto.
+Defined.
+
+Hint Resolve eval_to_x.
+
+Goal forall A t d, @term_denote_par A t d -> @term_denote_par_sem_eq A t d.
+  induction t; simpl in *;
+    repeat (
+        destruct_exists;
+        repeat match_destruct;
+        ii; subst;
+        try
+          match goal with
+          | |- exists _, _ => econstructor; ii; [solve[eauto]|]
+          end);
+    eauto.
+  specialize (IHt1 (Some t)); ii; destruct_exists; ii.
+  assert (term_denote_par_sem_eq (tapp H0 t2) (t t0)) by eauto.
+  admit.
+  admit.
+  admit.
+  econstructor; ii; solve [eauto].
+  all:
+    try (unfold eval_to in *; ii; eauto; [];
+         eapply transitive_closure_transitive;
+         try eapply transitive_closure_appx; try eassumption; solve [eauto]).
+Admitted.
+
+Goal forall A t d, @term_denote_par_sem_eq A t d -> @term_denote_par A t d.
+  induction t; simpl in *;
+    repeat (ii;
+            repeat match_destruct;
+            to_false discriminate;
+            destruct_exists;
+            repeat
+              match goal with
+              | |- Some _ = Some _ => apply f_equal
+              | H : tlit _ = tlit _ |- _ => invcs H
+              end;
+            repeat ext;
+            use_trans_val_eq_with eauto); eauto.
+  (*pose proof (term_denote_par_exists t1);
+    pose proof (term_denote_par_exists t2);
+    destruct_exists;
+    do 2 econstructor; ii; try eassumption; [];
+      specialize (IHt1 H0); specialize (IHt2 H1); ii.
+  repeat match_destruct; ii.
+  admit.
+  admit.
+  admit.*)
+  admit.
+  + specialize (H3 (tlit H1) H1); remove_premise eauto.
+    match_destruct; try (exfalso; solve [eauto]); [].
+    destruct_exists; ii.
+    apply f_equal; ext.
+    specialize (H7 (tlit H6) H6); remove_premise eauto.
+    use_trans_val_eq_with eauto.
+    match_destruct; ii; try (exfalso; solve [eauto]); [].
+    use_trans_val_eq_with eauto.
+    dependent destruction H13.
+    dependent destruction H9; try (Apply red_not_val; exfalso; solve [eauto]); [].
+    use_trans_val_eq_with eauto.
+    invcs H15; ii.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + admit.
+  + destruct (t H1) eqn:?.
+    apply f_equal; ext.
+    match_destruct.
+  + admit.
+  + admit.
+Defined.
+
 Fixpoint type_denote t : Type :=
   match t with
   | tyreal => R

@@ -106,7 +106,7 @@ Hint Constructors hasZ.
 
 Definition eval_to { T } x y := (transitive_closure red x y /\ @val T y).
 
-Arguments eval_to { T } x y /.
+Hint Unfold eval_to.
 
 Definition halt { T } (x : term T) := exists y, eval_to x y.
 
@@ -284,16 +284,19 @@ Definition hasY_red_back t x y : @red t x y -> hasZ y -> hasZ x :=
 
 Hint Resolve hasY_red_back.
 
+Hint Unfold eval_to.
+
 Definition rel_red_back t : forall x y, @red t x y -> rel y -> rel x :=
   ltac:(induction t;
-        intros H;
-        dependent destruction H;
-        ii;
-        unfold_rel;
-        simpl in *;
-        repeat destruct_exists;
-        ii;
-        eauto 8).
+          intros H;
+          dependent destruction H;
+          ii;
+          unfold_rel;
+          simpl in *;
+          repeat destruct_exists;
+          unfold eval_to in *;
+          ii;
+          eauto 8).
 
 Hint Resolve rel_red_back.
 
@@ -407,6 +410,7 @@ Definition rel_hold t x (_ : ~ hasZ x) : @rel t x.
         try goal_rel_step;
         try (econstructor; ii; [solve [eauto]|solve [eauto]|]);
         unfold_rel;
+        unfold eval_to in *;
         simpl in *;
         use_trans_val_eq;
         try Apply noZ_split;
