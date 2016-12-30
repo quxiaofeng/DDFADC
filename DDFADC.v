@@ -522,7 +522,7 @@ Definition term_denote_par_exists { A } (t : term A) : exists d, term_denote_par
   + admit. (*it is wrong definition anyway, dont bother proofing it*)
 Admitted.
 
-Definition term_denote_par_sem_eq_exists { A } (t : term A) : exists d, term_denote_par_sem_eq t d.
+Definition term_denote_par_os_exists { A } (t : term A) : exists d, term_denote_par_os t d.
   induction t; simpl in *;
     repeat (destruct_exists;
             repeat match_destruct;
@@ -548,7 +548,7 @@ Goal forall A t dl dr, @term_denote_par A t dl -> @term_denote_par A t dr -> dl 
   admit (*case Z*).
 Admitted.
 
-Goal forall A t dl dr, @term_denote_par_sem_eq A t dl -> @term_denote_par_sem_eq A t dr -> dl = dr.
+Goal forall A t dl dr, @term_denote_par_os A t dl -> @term_denote_par_os A t dr -> dl = dr.
   induction A;
     repeat (
         simpl in *;
@@ -589,7 +589,38 @@ Defined.
 
 Hint Resolve eval_to_x.
 
-Goal forall A t d, @term_denote_par A t d -> @term_denote_par_sem_eq A t d.
+Definition term_denote_par_os_trans_back { A } t t' d :
+  transitive_closure red t t' -> @term_denote_par_os A t' d -> @term_denote_par_os A t d.
+  destruct A;
+    repeat (simpl in *;
+            ii;
+            repeat match_destruct;
+            unfold eval_to in *;
+            destruct_exists;
+            use_trans_val_trans);
+    (econstructor; econstructor + idtac) + idtac;
+    ii; try eapply transitive_closure_transitive; try eassumption; solve [eauto].
+Defined.
+
+Definition term_denote_par_os_trans { A } t t' d :
+  transitive_closure red t t' -> @term_denote_par_os A t d -> @term_denote_par_os A t' d.
+  destruct A;
+    repeat (simpl in *;
+            ii;
+            repeat match_destruct;
+            unfold eval_to in *;
+            destruct_exists;
+            use_trans_val_trans);
+    eauto;
+    try
+      match goal with
+      | H : _ -> False |- _ => apply H
+      end;
+    try ((econstructor; econstructor + idtac) + idtac;
+         ii; try eapply transitive_closure_transitive; try eassumption; solve [eauto]).
+Defined.
+
+Goal forall A t d, @term_denote_par A t d -> @term_denote_par_os A t d.
   induction t; simpl in *;
     repeat (
         destruct_exists;
@@ -601,7 +632,7 @@ Goal forall A t d, @term_denote_par A t d -> @term_denote_par_sem_eq A t d.
           end);
     eauto.
   specialize (IHt1 (Some t)); ii; destruct_exists; ii.
-  assert (term_denote_par_sem_eq (tapp H0 t2) (t t0)) by eauto.
+  assert (term_denote_par_os (tapp H0 t2) (t t0)) by eauto.
   admit.
   admit.
   admit.
@@ -610,7 +641,7 @@ Goal forall A t d, @term_denote_par A t d -> @term_denote_par_sem_eq A t d.
     try (unfold eval_to in *; ii; eauto; [];
          eapply transitive_closure_transitive;
          try eapply transitive_closure_appx; try eassumption; solve [eauto]).
-
+  Deduct @term_denote_par_os_halt; unfold halt, eval_to in *; destruct_exists; ii.
   econstructor; ii.
   eapply eval_to_x.
 Admitted.
