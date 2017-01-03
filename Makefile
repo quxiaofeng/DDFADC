@@ -103,6 +103,7 @@ endif
 
 VFILES:=Red.v\
   Rel.v\
+  SemEq.v\
   DDFADC.v
 
 ifneq ($(filter-out archclean clean cleanall printenv,$(MAKECMDGOALS)),)

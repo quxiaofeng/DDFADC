@@ -1,5 +1,6 @@
 Red.v
 Rel.v
+SemEq.v
 DDFADC.v
 -R . DDFADC
 -o Makefile
