@@ -646,9 +646,10 @@ Goal forall A t d, @term_denote_par A t d -> @term_denote_par_os A t d.
   eapply eval_to_x.
 Admitted.
 
-Goal forall A t d, @term_denote_par_sem_eq A t d -> @term_denote_par A t d.
+Goal forall A t d, @term_denote_par_os A t d -> @term_denote_par A t d.
   induction t; simpl in *;
     repeat (ii;
+            unfold eval_to in *;
             repeat match_destruct;
             to_false discriminate;
             destruct_exists;
@@ -699,9 +700,12 @@ Goal forall A t d, @term_denote_par_sem_eq A t d -> @term_denote_par A t d.
   + destruct (t H1) eqn:?.
     apply f_equal; ext.
     match_destruct.
+    admit.
+    admit.
+    admit.
   + admit.
   + admit.
-Defined.
+Admitted.
 
 Fixpoint type_denote t : Type :=
   match t with
@@ -741,7 +745,7 @@ Definition term_denote_red { A } (l r : term A) x :
         destruct_exists; ii;
         use_red_trans_val;
         try match_destruct); eauto 6.
-Defined.
+Admitted.
 
 Definition term_denote_trans { A } (l r : term A) x :
   transitive_closure red l r -> term_denote l x -> term_denote r x :=
@@ -752,7 +756,7 @@ Definition term_denote_red_back { A } (l r : term A) x :
   destruct A; ii; simpl in *;
     repeat (destruct_exists; ii;
             try match_destruct); eauto 7.
-Defined.
+Admitted.
 
 Hint Resolve term_denote_red_back.
 
@@ -766,6 +770,7 @@ Definition sem_eq_denote_rel { A } (l r : term A) :
   induction A; simpl in *; ii;
     repeat (
         try match_destruct;
+        unfold eval_to in *;
         remove_premise eauto;
         destruct_exists; ii;
         use_trans_val_det;
@@ -795,9 +800,9 @@ Definition sem_eq_denote_rel { A } (l r : term A) :
   + econstructor; ii; try eassumption; [].
     specialize (H5 x0 y); ii.
     eapply IHA2; try eassumption; [].
-    Deduct (term_denote_halt x0); simpl in *; destruct_exists; ii; [].
+    Deduct (term_denote_halt x0); simpl in *; destruct_exists; unfold eval_to in *; ii; [].
     eapply sem_eq_trans_back; try eapply transitive_closure_appx; try eassumption.
-    eapply H2; ii.
+    eapply H2; ii; eauto.
     eapply IHA1; try eassumption;
       eapply term_denote_trans; eassumption.
   + admit.
@@ -810,6 +815,7 @@ Definition denote_sem_eq { A } (l r : term A) :
                 | H : tlit _ = tlit _ |- _ => invcs H
                 | H : _ = _ |- _ => solve [inversion H]
                 end;
+            unfold eval_to in *;
             try match_destruct;
             destruct_exists; ii;
             use_trans_val_det;
@@ -817,7 +823,6 @@ Definition denote_sem_eq { A } (l r : term A) :
             subst);
     eauto.
   eapply sem_eq_trans; try eapply transitive_closure_appf; try eassumption; [].
-  
   admit.
 Admitted.
 
@@ -841,6 +846,7 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
               | H : _ + _ |- _ => destruct H
               | H : _ = _ |- _ => solve [inversion H]
               end;
+          unfold eval_to in *;
           try Apply @app_eq;
           try Apply @vsum;
           try Apply @vprod;
@@ -866,9 +872,11 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
     ++ simpl in *; remove_premise eauto; cleanPS tauto; destruct_exists; ii.
        specialize (H19 H13 H17); specialize (H11 xl1 xr1); ii.
        destruct (classic (halt (tapp H14 xl1))).
-       +++ Deduct @sem_eq_halt; eauto; []; simpl in *; destruct_exists; ii.
+       +++ Deduct @sem_eq_halt; eauto; [];
+             simpl in *; unfold eval_to in *; destruct_exists; ii.
            specialize (H19 H11 H18).
-           assert (sem_eq H11 H18) by (eapply sem_eq_eval; simpl in *; ii; eassumption).
+           assert (sem_eq H11 H18) by
+               (eapply sem_eq_eval; simpl in *; ii; unfold eval_to; ii; eassumption).
            remove_premise eauto.
            eapply sem_eq_trans_back;
              try eapply transitive_closure_appf;
@@ -881,9 +889,10 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
   + specialize (H10 H15 H9); specialize (H11 H14 H0); remove_premise eauto.
     specialize (H11 xl1 xr1); ii.
     destruct (classic (halt (tapp H14 xl1))).
-    ++ Deduct @sem_eq_halt; eauto; []; simpl in *; destruct_exists; ii.
+    ++ Deduct @sem_eq_halt; eauto; []; simpl in *; unfold eval_to in *; destruct_exists; ii.
        specialize (H17 H11 H13).
-       assert (sem_eq H11 H13) by (eapply sem_eq_eval; simpl in *; ii; eassumption).
+       assert (sem_eq H11 H13) by
+           (eapply sem_eq_eval; simpl in *; unfold eval_to; ii; eassumption).
        remove_premise eauto.
        eapply sem_eq_trans_back; try eapply transitive_closure_appx; eassumption.
     ++ admit.
@@ -891,7 +900,7 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
     specialize (H10 xl1 xr1); ii.
     destruct (classic (halt (tapp H12 xl1))).
     ++ pose proof (sem_eq_halt (tapp H12 xl1) (tapp H9 xr1));
-         simpl in *; remove_premise eauto;
+         simpl in *; unfold eval_to in *; remove_premise eauto;
            destruct_exists; ii;
              use_trans_val_det; cleanPS tauto.
        specialize (H14 H10 H17); ii.
@@ -923,18 +932,22 @@ Hint Resolve red_sem_eq.
 
 Definition sem_eq_transitive { A } (x y z : term A) : sem_eq x y -> sem_eq y z -> sem_eq x z.
   induction A; simpl in *; ii; remove_premise eauto; repeat destruct_exists; ii;
-    use_trans_val_det; cleanPS tauto; repeat Apply @vsum; repeat Apply @vprod;
-      repeat
-        match goal with
-        | H : _ + _ |- _ => destruct H
-        end;
-      repeat destruct_exists;
-      repeat (
-          try Apply @app_eq;
-          subst;
-          try discharge_app_eq;
-          ii);
-      eauto.
+    cleanPS tauto;
+      simpl in *; unfold eval_to in *;
+        repeat
+          match goal with
+          | H : _ + _ |- _ => destruct H
+          end;
+        repeat (
+            try Apply @vsum;
+            try Apply @vprod;
+            try Apply @app_eq;
+            destruct_exists;
+            subst;
+            try discharge_app_eq;
+            ii;
+            use_trans_val_det);
+        cleanPS tauto; eauto.
   + eapply H3.
     eapply H2.
     eauto.
@@ -952,7 +965,7 @@ Definition sem_eq_transitive { A } (x y z : term A) : sem_eq x y -> sem_eq y z -
   + eapply IHA2.
     eapply H3; ii; eauto.
     eapply H4; ii; eauto.
-  +  eapply H6; ii; try eassumption; eauto.
+  + eapply H6; ii; try eassumption; eauto.
   + eapply H5; ii; try eassumption; eauto.
   + eapply H8; ii; try eassumption; eauto.
   + eapply H9; ii; try eassumption; eauto.
