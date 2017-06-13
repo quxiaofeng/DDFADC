@@ -1,10 +1,9 @@
 Require Export Rel CoqUtil.Fix.
 
 Definition Z_or_val { ty } :
-  forall (x : term ty), hasZ x \/ halt x.
+  forall (x : term ty), halt x.
   intros x.
   pose proof (rel_hold ty x).
-  destruct (hasZ_dec x); ii.
   Apply rel_halt; ii.
 Defined.
 
@@ -61,10 +60,7 @@ Class FTG (repr : type -> Type) :=
     fC___ { A B C } f g : _ := fapp (@fC__ A B C f g);
     fW { A B } : repr ((A ~> A ~> B) ~> (A ~> B));
     fW_ { A B } : _ := fapp (@fW A B);
-    fW__ { A B } f : _ := fapp (@fW_ A B f);
-    fZ { A B } : repr (((A ~> B) ~> (A ~> B)) ~> (A ~> B));
-    fZ_ { A B } : _ := fapp (@fZ A B);
-    fZ__ { A B } f : _ := fapp (@fZ_ A B f)
+    fW__ { A B } f : _ := fapp (@fW_ A B f)
   }.
 
 Instance Eval : FTG term :=
@@ -89,7 +85,6 @@ Instance Eval : FTG term :=
     fB A B C := tB;
     fC A B C := tC;
     fW A B := tW;
-    fZ A B := tZ
   }.
 
 Instance Next repr Arg { orig : FTG repr } :
@@ -120,8 +115,7 @@ Instance Next repr Arg { orig : FTG repr } :
     fI A := inl fI;
     fB A B C := inl fB;
     fC A B C := inl fC;
-    fW A B := inl fW;
-    fZ A B := inl fZ
+    fW A B := inl fW
   }.
 
 Definition flam { repr Arg A } { orig : FTG repr } (exp : repr A + repr (Arg ~> A)) :=
@@ -153,8 +147,7 @@ Instance GetTerm : FTG Term :=
     fI A := fun _ _ => fI;
     fB A B C := fun _ _ => fB;
     fC A B C := fun _ _ => fC;
-    fW A B := fun _ _ => fW;
-    fZ A B := fun _ _ => fZ
+    fW A B := fun _ _ => fW
   }.
 
 Fixpoint sem_eq { A } : term A -> term A -> Prop :=

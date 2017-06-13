@@ -114,18 +114,6 @@ Fixpoint term_denote_par { A } (t : term A) : type_denote_par A -> Prop :=
                                      | Some f' => f' x
                                      | _ => None
                                      end)))
-  | tZ => (fun td =>
-            match td with
-            | Some Z => forall f,
-                match Z f with
-                | Some ZF => is_fixpoint (fun x => match f x with
-                                               | Some fx => fx
-                                               | None => (fun _ => None)
-                                               end) ZF : Prop (*should be least fix point*)
-                | None => False
-                end
-            | None => False
-            end)
   end.
 
 Definition term_denote_par_exists { A } (t : term A) : exists d, term_denote_par t d.
@@ -134,8 +122,7 @@ Definition term_denote_par_exists { A } (t : term A) : exists d, term_denote_par
        | Some f, Some x => f x
        | _, _ => None
        end); exists IHt1; exists IHt2; ii; repeat match_destruct; ii.
-  + admit. (*it is wrong definition anyway, dont bother proofing it*)
-Admitted.
+Defined.
 
 Definition term_denote_par_os_exists { A } (t : term A) : exists d, term_denote_par_os t d.
   induction t; simpl in *;
@@ -160,8 +147,7 @@ Goal forall A t dl dr, @term_denote_par A t dl -> @term_denote_par A t dr -> dl 
         (specialize (IHt1 _ _ H H1); invcs IHt1) ||
                                                  (specialize (IHt2 _ _ H H1); invcs IHt2)
       end; ii.
-  admit (*case Z*).
-Admitted.
+Defined.
 
 Goal forall A t dl dr, @term_denote_par_os A t dl -> @term_denote_par_os A t dr -> dl = dr.
   induction A;
@@ -318,8 +304,6 @@ Goal forall A t d, @term_denote_par_os A t d -> @term_denote_par A t d.
     admit.
     admit.
     admit.
-  + admit.
-  + admit.
 Admitted.
 
 Fixpoint type_denote t : Type :=
@@ -531,8 +515,6 @@ Definition sem_eq_refl { A } (x : term A) : val x -> sem_eq x x.
        specialize (H11 xl0 xr0); ii.
        eapply sem_eq_trans_back; try eapply transitive_closure_appf; eassumption.
     ++ admit.
-  + pose proof (H7 H9 H6); remove_premise eauto.
-    admit. (*cannot prove*)
 Admitted.
 
 Hint Resolve sem_eq_refl.
@@ -745,7 +727,6 @@ Fixpoint toTerm { A : type } (t : term A) : Term A :=
   | tB => fB
   | tC => fC
   | tW => fW
-  | tZ => fZ
   end.
 
 Fixpoint drel { G } { T : type } { GA : Gradient G } : term T -> Prop :=

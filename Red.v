@@ -34,8 +34,9 @@ Inductive term : type -> Type :=
 | tI { A } : term (A ~> A)
 | tB { A B C } : term ((B ~> C) ~> (A ~> B) ~> (A ~> C))
 | tC { A B C } : term ((A ~> B ~> C) ~> (B ~> A ~> C))
-| tW { A B } : term ((A ~> A ~> B) ~> (A ~> B))
-| tZ { A B } : term (((A ~> B) ~> (A ~> B)) ~> (A ~> B)).
+| tW { A B } : term ((A ~> A ~> B) ~> (A ~> B)).
+
+Notation tapp2 f x y := (tapp (tapp f x) y).
 
 Inductive val : forall { A }, term A -> Prop :=
 | vttt : val ttt
@@ -55,7 +56,7 @@ Inductive val : forall { A }, term A -> Prop :=
 | vtright' A B b : val b -> val (tapp (@tright A B) b)
 | vtsummatch A B C : val (@tsummatch A B C)
 | vtsummatch' A B C s : val s -> val (tapp (@tsummatch A B C) s)
-| vtsummatch'' A B C s f : val s -> val f -> val (tapp (tapp (@tsummatch A B C) s) f)
+| vtsummatch'' A B C s f : val s -> val f -> val (tapp2 (@tsummatch A B C) s f)
 | vtmkprod A B : val (@tmkprod A B)
 | vtmkprod' A B a : val a -> val (tapp (@tmkprod A B) a)
 | vtmkprod'' A B a b : val a -> val b -> val (tapp (tapp (@tmkprod A B) a) b)
@@ -74,9 +75,7 @@ Inductive val : forall { A }, term A -> Prop :=
 | vtC' A B C f : val f -> val (tapp (@tC A B C) f)
 | vtC'' A B C f x : val f -> val x -> val (tapp (tapp (@tC A B C) f) x)
 | vtW A B : val (@tW A B)
-| vtW' A B f : val f -> val (tapp (@tW A B) f)
-| vtZ A B : val (@tZ A B)
-| vtZ' A B f : val f -> val (tapp (@tZ A B) f).
+| vtW' A B f : val f -> val (tapp (@tW A B) f).
 
 Hint Constructors val.
 
@@ -115,9 +114,6 @@ Inductive red : forall { A }, term A -> term A -> Prop :=
 | rtW { A B } f x :
     val f -> val x ->
     red (tapp (tapp (@tW A B) f) x) (tapp (tapp f x) x)
-| rtZ { A B } f x :
-    val f -> val x ->
-    red (tapp (tapp (@tZ A B) f) x) (tapp (tapp f (tapp tZ f)) x)
 | rtappf { A B } f f' x : @red (A ~> B) f f' -> red (tapp f x) (tapp f' x)
 | rtappx { A B } f x x' : val f -> red x x' -> red (@tapp A B f x) (tapp f x').
 

@@ -55,13 +55,10 @@ Ltac discharge_type_eq :=
 
 Definition val_dec X (tm : term X) : { val tm } + { ~ (val tm) }.
   induction tm; eauto; [].
-  destruct IHtm1, IHtm2; try (right; intuition idtac; work; solve [eauto]); eauto; [].
+  destruct IHtm1, IHtm2; try (right; ii; work; solve [eauto]); eauto; [].
   dependent destruction tm1; eauto; try (right; solve [dd1]); [].
   dependent destruction tm1_1; work; eauto;
-    (right;
-     repeat destruct_exists;
-     subst;
-     solve [dd1]).
+    right; work; congruence.
 Defined.
 
 Definition red_not_val A x y : red x y -> ~ @val A x.
@@ -96,13 +93,6 @@ Definition eval A x : { y | red x y } + { @val A x }.
     dependent destruction x2_1_1; work; [].
     red_it.
 Defined.
-
-Inductive hasZ : forall { x }, term x -> Prop :=
-| direct_Z A B : hasZ (@tZ A B)
-| left_Z A B l r : hasZ l -> hasZ (@tapp A B l r)
-| right_Z A B l r : hasZ r -> hasZ (@tapp A B l r).
-
-Hint Constructors hasZ.
 
 Definition eval_to { T } x y := (transitive_closure red x y /\ @val T y).
 
@@ -205,18 +195,11 @@ Definition transitive_closure_appx { A B } f x x' :
   transitive_closure red (@tapp A B f x) (tapp f x') :=
   ltac:(induction 2; eauto).
 
-Definition hasZ_dec { A } x : { @hasZ A x } + { ~ hasZ x } :=
-  ltac:(
-    dependent induction x;
-      repeat
-        match goal with
-        | H : { _ } + { _ } |- _ => destruct H
-        end;
-      eauto; right; ii; dependent destruction H; eauto; discharge_type_eq).
+Definition type_eq_dec (x y : type) : { x = y } + { x <> y } :=
+  ltac:(decide equality).
 
-Definition type_eq_dec (x y : type) : { x = y } + { x <> y } := ltac:(decide equality).
-
-Definition app_eq_func { A B } fl fr xl xr : @tapp A B fl xl = tapp fr xr -> fl = fr.
+Definition app_eq_func { A B } fl fr xl xr :
+  @tapp A B fl xl = tapp fr xr -> fl = fr.
   intros H; invcs H.
   repeat Apply (Eqdep_dec.inj_pair2_eq_dec _ type_eq_dec); tauto.
 Defined.
@@ -266,23 +249,6 @@ Definition halt_red_back t x y : @red t x y -> halt y -> halt x :=
   ltac:(unfold halt, eval_to; ii; destruct_exists; ii; eauto).
 
 Hint Resolve halt_red_back.
-
-Ltac break_hasZ :=
-  repeat
-    match goal with
-    | H : hasZ (tapp _ _) |- _ => dependent destruction H
-    | H : hasZ (tlit _) |- _ => dependent destruction H
-    end;
-  try
-    match goal with
-    | H : hasZ _ |- _ => solve[dependent destruction H; discharge_type_eq]
-    end;
-  try discharge_type_eq.
-
-Definition hasY_red_back t x y : @red t x y -> hasZ y -> hasZ x :=
-  ltac:(intros H; dependent induction H; ii; break_hasZ; eauto).
-
-Hint Resolve hasY_red_back.
 
 Hint Unfold eval_to.
 
@@ -348,11 +314,6 @@ Definition rel_red_preserve t : forall x y, @red t x y -> rel x -> rel y.
   econstructor; ii; use_red_trans_val; eauto.  
 Defined.
 
-Definition hasZ_trans_back t x y : transitive_closure (@red t) x y -> hasZ y -> hasZ x :=
-  ltac:(induction 1; eauto).
-
-Hint Resolve hasZ_trans_back.
-
 Definition rel_trans_preserve t x y :
   transitive_closure (@red t) x y -> rel x -> rel y.
   induction 1; ii; [].
@@ -400,10 +361,7 @@ Ltac use_trans_val_eq_with T :=
 
 Ltac use_trans_val_eq := use_trans_val_eq_with eauto.
 
-Definition noZ_split A B f x : ~ hasZ (@tapp A B f x) -> ~ hasZ f /\ ~ hasZ x :=
-  ltac:(ii; eauto).
-
-Definition rel_hold t x (_ : ~ hasZ x) : @rel t x.
+Definition rel_hold t x : @rel t x.
   induction x;
     try (compute; solve [eauto]);
     repeat (
@@ -422,16 +380,15 @@ Definition rel_hold t x (_ : ~ hasZ x) : @rel t x.
     Deduct rel_halt; unfold halt, eval_to in *; destruct_exists; ii.
     eapply rel_trans_back.
     eapply transitive_closure_appx; eauto.
-    apply H5; eauto; [].
+    apply H1; eauto; [].
     eapply rel_trans_preserve; eassumption.
   + left; econstructor; ii; solve [eauto].
   + right; econstructor; ii; solve [eauto].
   + do 2 econstructor; ii; solve [eauto].
-  + specialize (H9 _ H5 H7).
-    pose proof (rel_halt _ _ H9); unfold halt, eval_to in *; destruct_exists; ii.
+  + specialize (H8 _ H4 H6).
+    pose proof (rel_halt _ _ H8); unfold halt, eval_to in *; destruct_exists; ii.
     eapply rel_trans_back.
     eapply transitive_closure_appx; eassumption.
-    eapply H4; eauto; [].
+    eapply H3; eauto; [].
     eapply rel_trans_preserve; eassumption.
-  + exfalso; eauto.
 Defined.
