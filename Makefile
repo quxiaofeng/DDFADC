@@ -101,10 +101,7 @@ endif
 #                    #
 ######################
 
-VFILES:=Red.v\
-  Rel.v\
-  SemEq.v\
-  DDFADC.v
+VFILES:=DDFADC.v
 
 ifneq ($(filter-out archclean clean cleanall printenv,$(MAKECMDGOALS)),)
 -include $(addsuffix .d,$(VFILES))
